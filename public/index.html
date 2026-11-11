@@ -192,7 +192,7 @@
         activePlayer = soloPlayerId;
         p2RollVal = null;
         isDiceRollingP2 = false;
-       
+        
         pawn2.visible = false;
         pawn1.visible = true;
         if (window.p2PodiumGroup) window.p2PodiumGroup.visible = false;
@@ -1046,7 +1046,7 @@
         if (onComplete) onComplete();
         return;
       }
-     
+      
       window.speechSynthesis.cancel();
       goodyUtterance = new SpeechSynthesisUtterance(text);
       goodyUtterance.rate = 0.95;
@@ -1138,7 +1138,7 @@
         stopDiceCountdown();
         hasPlayerRolledThisTurn = true;
         isPawnMoving = true;
-       
+        
         if (contestant === "goody-contestant-2") {
           p2RollVal = roll; isDiceRollingP2 = false;
         } else {
@@ -1169,7 +1169,7 @@
         const mins = Math.max(0, Math.floor(matchTimerSeconds / 60)).toString().padStart(2, '0');
         const secs = Math.max(0, (matchTimerSeconds % 60)).toString().padStart(2, '0');
         const timeStr = `${mins}:${secs}`;
-       
+        
         gameClockValEl.textContent = timeStr;
         renderWallClockTexture(timeStr);
 
@@ -1313,7 +1313,7 @@
         const landedCountry = boardTileCoords[currentTileIdx].country;
         const qPool = COUNTRY_QUESTIONS[landedCountry] || COUNTRY_QUESTIONS["UK"];
         const rawQ = qPool[Math.floor(Math.random() * qPool.length)];
-       
+        
         activeQuestion = {
           country: landedCountry,
           text: rawQ.q,
@@ -1982,7 +1982,7 @@
       let fontSize = 48;
       if (cleanName.length > 8) fontSize = 36;
       if (cleanName.length > 12) fontSize = 28;
-     
+      
       ctx.font = `bold ${fontSize}px sans-serif`;
       ctx.fillText(cleanName, w / 2, h / 2 + 2);
 
@@ -2339,7 +2339,7 @@
           qBoardCtx.fillText("THE GOODY TONIGHT SHOW", 256, 110);
         } else {
           const isCurrentPlayerTurn = isSoloMode ? (activePlayer === soloPlayerId) : (activePlayer !== goodyPlayerSlot);
-         
+          
           if (gameState === "IN_PLAY" && (!hasPlayerRolledThisTurn || (hasPlayerRolledThisTurn && isPawnMoving && (p1RollVal !== null || p2RollVal !== null))) && isCurrentPlayerTurn) {
             const pName = contestantNames[activePlayer];
             const currentRolled = activePlayer === "goody-contestant-2" ? p2RollVal : p1RollVal;
@@ -2735,7 +2735,7 @@
       ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(x, y + height - 26, width, 26);
       ctx.fillStyle = isGoodyHostSlot ? '#00f0ff' : (isLive ? '#39ff14' : '#ffda66');
       ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center';
-     
+      
       const tag = isGoodyHostSlot
         ? `[AI HOST: GOODY]`
         : `${isLive ? ' LIVE ' : ' CALL'} ${name.toUpperCase()} [${city.toUpperCase()}]`;
