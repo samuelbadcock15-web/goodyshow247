@@ -1559,7 +1559,7 @@
       broadcastMicState("goody-contestant-1", false);
       broadcastMicState("goody-contestant-2", false);
 
-      connectedDataConns.forEach(c => {
+    connectedDataConns.forEach(c => {
         if (c.open) c.send({ type: "START_DICE_COUNTDOWN" });
       });
 
@@ -1569,40 +1569,41 @@
           if (!isSoloMode && p2RollVal === null) p2RollVal = Math.floor(Math.random() * 6) + 1;
           isDiceRollingP1 = false;
           isDiceRollingP2 = false;
-          renderStageQuestionBoard
+          renderStageQuestionBoard();
           renderBackstageScreens();
+          pushAuthoritativeState();
           setTimeout(finalizeDiceDuel, 1200);
         }
       });
     }
 
-   function handlePlayerRoll(contestant, name, roll) {
-  if (gameState === "OPENING_DUEL") {
-    if (contestant === "goody-contestant-2") {
-      if (p2RollVal !== null) return;
-      p2RollVal = roll; isDiceRollingP2 = false;
-    } else {
-      if (p1RollVal !== null) return;
-      p1RollVal = roll; isDiceRollingP1 = false;
-    }
-    playTone(587, 'sine', 0.15, 0.08);
-    renderStageQuestionBoard();
-    renderBackstageScreens();
-    pushAuthoritativeState();
+    function handlePlayerRoll(contestant, name, roll) {
+      if (gameState === "OPENING_DUEL") {
+        if (contestant === "goody-contestant-2") {
+          if (p2RollVal !== null) return;
+          p2RollVal = roll; isDiceRollingP2 = false;
+        } else {
+          if (p1RollVal !== null) return;
+          p1RollVal = roll; isDiceRollingP1 = false;
+        }
+        playTone(587, 'sine', 0.15, 0.08);
+        renderStageQuestionBoard();
+        renderBackstageScreens();
+        pushAuthoritativeState();
 
-    if ((isSoloMode && p1RollVal !== null) || (p1RollVal !== null && p2RollVal !== null)) {
-      stopDiceCountdown();
-      setTimeout(finalizeDiceDuel, 1200);
-    }
-  } else if (gameState === "IN_PLAY") {
-    if (contestant !== activePlayer || hasPlayerRolledThisTurn || isPawnMoving) {
-      if (contestant === "goody-contestant-2") isDiceRollingP2 = false;
-      else isDiceRollingP1 = false;
-      return;
-    }
-    stopDiceCountdown();
-    hasPlayerRolledThisTurn = true;
-    isPawnMoving = true;
+        if ((isSoloMode && p1RollVal !== null) || (p1RollVal !== null && p2RollVal !== null)) {
+          stopDiceCountdown();
+          setTimeout(finalizeDiceDuel, 1200);
+        }
+      } else if (gameState === "IN_PLAY") {
+        if (contestant !== activePlayer || hasPlayerRolledThisTurn || isPawnMoving) {
+          if (contestant === "goody-contestant-2") isDiceRollingP2 = false;
+          else isDiceRollingP1 = false;
+          return;
+        }
+        stopDiceCountdown();
+        hasPlayerRolledThisTurn = true;
+        isPawnMoving = true;
 
     if (contestant === "goody-contestant-2") {
       p2RollVal = roll; isDiceRollingP2 = false;
