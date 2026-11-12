@@ -65,52 +65,43 @@
     #mobile-controls {
       display: none;
       position: fixed;
-      bottom: 72px;
-      left: 16px;
-      right: 16px;
-      justify-content: space-between;
-      align-items: flex-end;
+      bottom: 36px;
+      left: 24px;
       pointer-events: none;
       z-index: 35;
     }
     .dpad-grid {
       display: grid;
-      grid-template-columns: repeat(3, 48px);
-      grid-template-rows: repeat(2, 48px);
-      gap: 6px;
+      grid-template-columns: repeat(3, 68px);
+      grid-template-rows: repeat(2, 68px);
+      gap: 10px;
       pointer-events: auto;
     }
     .m-btn {
       background: rgba(22, 9, 44, 0.88);
       border: 2px solid #00f0ff;
-      border-radius: 10px;
+      border-radius: 14px;
       color: #fff;
       font-family: monospace;
       font-weight: bold;
-      font-size: 1.1rem;
+      font-size: 1.55rem;
       display: flex;
       align-items: center;
       justify-content: center;
       user-select: none;
       -webkit-user-select: none;
+      -webkit-touch-callout: none;
       touch-action: none;
     }
-    .m-btn:active {
+    .m-btn:active, .m-btn.is-pressed {
       background: #00f0ff;
       color: #05020a;
-    }
-    #mobile-action-btn {
-      pointer-events: auto;
-      padding: 14px 18px;
-      border-color: #39ff14;
-      color: #39ff14;
-      font-size: 0.9rem;
     }
 
     @media (hover: none) and (pointer: coarse) {
       #mobile-crosshair { display: block; }
       #mobile-controls { display: flex; }
-      #mode-banner { font-size: 0.75rem; padding: 6px 12px; bottom: 10px; }
+      #mode-banner { display: none; }
     }
   </style>
 </head>
@@ -130,13 +121,12 @@
   <div id="mobile-controls">
     <div class="dpad-grid">
       <div></div>
-      <button class="m-btn" id="btn-m-fwd">▲</button>
+      <div class="m-btn" id="btn-m-fwd" role="button" aria-label="Forward">▲</div>
       <div></div>
-      <button class="m-btn" id="btn-m-left">◀</button>
-      <button class="m-btn" id="btn-m-back">▼</button>
-      <button class="m-btn" id="btn-m-right">▶</button>
+      <div class="m-btn" id="btn-m-left" role="button" aria-label="Turn Left">◀</div>
+      <div class="m-btn" id="btn-m-back" role="button" aria-label="Backward">▼</div>
+      <div class="m-btn" id="btn-m-right" role="button" aria-label="Turn Right">▶</div>
     </div>
-    <button class="m-btn" id="mobile-action-btn">🎯 TAP TARGET</button>
   </div>
 
   <div id="mode-banner">
@@ -3240,15 +3230,6 @@ window.addEventListener('pointerup', (e) => {
   handleScreenTap(e.clientX, e.clientY);
 });
 
-// Mobile Crosshair Fire Button (taps exact center of screen where crosshair sits)
-const mobileActionBtn = document.getElementById('mobile-action-btn');
-if (mobileActionBtn) {
-  mobileActionBtn.addEventListener('pointerdown', (e) => {
-    e.stopPropagation();
-    handleScreenTap(window.innerWidth / 2, window.innerHeight / 2);
-  });
-}
-
 const moveState = { forward: false, backward: false, turnLeft: false, turnRight: false };
 const plushiePosition = new THREE.Vector3(-1.6, 0.44, -1.2);
 const plushieRotation = { yaw: 0 };
@@ -3257,16 +3238,22 @@ const plushieRotation = { yaw: 0 };
 function bindMobileHoldButton(btnId, stateKey) {
   const el = document.getElementById(btnId);
   if (!el) return;
-  el.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
+  const press = (e) => {
+    if (e.cancelable) e.preventDefault();
     e.stopPropagation();
     initAudio();
     moveState[stateKey] = true;
-  });
-  const release = (e) => {
-    e.preventDefault();
-    moveState[stateKey] = false;
+    el.classList.add('is-pressed');
   };
+  const release = (e) => {
+    if (e && e.cancelable) e.preventDefault();
+    moveState[stateKey] = false;
+    el.classList.remove('is-pressed');
+  };
+  el.addEventListener('touchstart', press, { passive: false });
+  el.addEventListener('touchend', release, { passive: false });
+  el.addEventListener('touchcancel', release, { passive: false });
+  el.addEventListener('pointerdown', press);
   el.addEventListener('pointerup', release);
   el.addEventListener('pointerleave', release);
   el.addEventListener('pointercancel', release);
