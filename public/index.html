@@ -681,6 +681,7 @@ lockedP1SocketId = state.lockedP1SocketId || null;
       }
 
       if (modeType === "SOLO") {
+        recordSessionGameStarted();
         isSoloMode = true;
         isVsGoodyMode = false;
         soloPlayerId = "goody-contestant-1";
@@ -1661,7 +1662,6 @@ lockedP1SocketId = state.lockedP1SocketId || null;
     }
 
     function bootStudio() {
-      recordSessionGameStarted();
       studioPower = true;
       gameState = "INTRO_SPEECH";
       updateStudioLighting(true);
@@ -1671,6 +1671,7 @@ lockedP1SocketId = state.lockedP1SocketId || null;
     }
 
     function beginTenSecondDiceDuel() {
+      recordSessionGameStarted();
       gameState = "OPENING_DUEL";
       updateHudStatusBanner();
       renderStageQuestionBoard();
