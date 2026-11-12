@@ -193,7 +193,9 @@
     let diceCountdown = 10;
     let diceCountdownInterval = null;
     let isDiceTimerActive = false;
-
+let p2JoinCountdown = 10;
+    let p2JoinInterval = null;
+    let isP2JoinTimerActive = false;
     let p1RollVal = null;
     let p2RollVal = null;
     let isDiceRollingP1 = false;
@@ -263,10 +265,11 @@
     let savedGameState = null;
 
     const spectatorPlushies = new Map();
-
-    function updateHudStatusBanner() {
+function updateHudStatusBanner() {
       if (gameState === "MODE_PROMPT") {
         countdownPill.innerHTML = `STATUS: <span style="color:#ffda66;">SELECT GAME MODE (STEP ON PODIUM 1)</span>`;
+      } else if (gameState === "WAITING_FOR_P2") {
+        countdownPill.innerHTML = `STATUS: <span style="color:#00f0ff;">WAITING FOR PLAYER 2 (${p2JoinCountdown}s)...</span>`;
       } else if (gameState === "OPENING_DUEL") {
         countdownPill.innerHTML = `STATUS: <span style="color:#00f0ff;">OPENING DICE ROLL!</span>`;
       } else if (gameState === "IN_PLAY") {
@@ -306,6 +309,8 @@ function pushAuthoritativeState() {
         isQuestionTimerActive,
         isTieBreakerActive,
         isDropoutRecoveryPrompt: !!window.isDropoutRecoveryPrompt,
+        p2JoinCountdown,
+        isP2JoinTimerActive,
         contestantNames
       });
     }
@@ -367,7 +372,7 @@ function pushAuthoritativeState() {
         if (typeof renderWallClockTexture === 'function') renderWallClockTexture(timeStr);
       }
 
-     isTimeExpired = !!state.isTimeExpired;
+isTimeExpired = !!state.isTimeExpired;
       activeQuestion = state.activeQuestion || null;
       activeRecap = state.activeRecap || null;
       stageSelectedOption = state.stageSelectedOption || null;
@@ -376,6 +381,8 @@ function pushAuthoritativeState() {
       isQuestionTimerActive = !!state.isQuestionTimerActive;
       isTieBreakerActive = !!state.isTieBreakerActive;
       window.isDropoutRecoveryPrompt = !!state.isDropoutRecoveryPrompt;
+      p2JoinCountdown = typeof state.p2JoinCountdown === 'number' ? state.p2JoinCountdown : 10;
+      isP2JoinTimerActive = !!state.isP2JoinTimerActive;
 
       updateHudStatusBanner();
       if (typeof renderStageQuestionBoard === 'function') renderStageQuestionBoard();
@@ -666,17 +673,84 @@ function pushAuthoritativeState() {
       } else if (modeType === "TWOPLAYER") {
         isSoloMode = false;
         isVsGoodyMode = false;
+        window.isDropoutRecoveryPrompt = false;
         pawn1.visible = true;
         pawn2.visible = true;
         if (window.p2PodiumGroup) window.p2PodiumGroup.visible = true;
-        bootStudio();
-        const speech = `Welcome to The Goody Tonight Show! We are running full 2-Player mode with ${contestantNames["goody-contestant-1"]} and ${contestantNames["goody-contestant-2"]}! Let's determine who goes first with our opening dice roll!`;
-        speakGoody(speech, () => {
-          beginTenSecondDiceDuel();
+
+        // Check if another plushie is already standing on Podium 2
+        const p2PosCheck = new THREE.Vector3(1.6, 0.44, -2.2);
+        let p2Occupied = isLocalOnPodium2 && !isLocalOnPodium1;
+        remotePlushies.forEach((entry) => {
+          if (entry.mesh && entry.mesh.position.distanceTo(p2PosCheck) < 0.65) {
+            p2Occupied = true;
+          }
         });
+
+        bootStudio();
+
+        if (p2Occupied) {
+          const speech = `Welcome to The Goody Tonight Show! Both podiums are occupied! Let's determine who goes first with our opening dice roll!`;
+          speakGoody(speech, () => {
+            beginTenSecondDiceDuel();
+          });
+        } else {
+          startPodium2JoinWait();
+        }
       }
     }
 
+    function stopPodium2JoinWait() {
+      if (p2JoinInterval) {
+        clearInterval(p2JoinInterval);
+        p2JoinInterval = null;
+      }
+      isP2JoinTimerActive = false;
+    }
+
+    function startPodium2JoinWait() {
+      stopPodium2JoinWait();
+      gameState = "WAITING_FOR_P2";
+      p2JoinCountdown = 10;
+      isP2JoinTimerActive = false;
+      updateHudStatusBanner();
+      renderStageQuestionBoard();
+      pushAuthoritativeState();
+
+      // Speech-first: Goody speaks BEFORE the 10-second countdown starts ticking
+      const inviteSpeech = `Welcome to The Goody Tonight Show! Player 1 is ready at Podium 1. Someone step onto Podium 2 within 10 seconds to join the battle!`;
+      speakGoody(inviteSpeech, () => {
+        if (gameState !== "WAITING_FOR_P2" || !isLocalHost) return;
+        p2JoinCountdown = 10;
+        isP2JoinTimerActive = true;
+        renderStageQuestionBoard();
+        pushAuthoritativeState();
+
+        p2JoinInterval = setInterval(() => {
+          if (!isLocalHost || gameState !== "WAITING_FOR_P2") {
+            stopPodium2JoinWait();
+            return;
+          }
+          p2JoinCountdown--;
+          renderStageQuestionBoard();
+          pushAuthoritativeState();
+
+          if (p2JoinCountdown <= 0) {
+            stopPodium2JoinWait();
+            window.isDropoutRecoveryPrompt = true;
+            studioPower = false;
+            gameState = "MODE_PROMPT";
+            updateStudioLighting(false);
+            updateCameraAlignment();
+            updateHudStatusBanner();
+            renderStageQuestionBoard();
+            pushAuthoritativeState();
+
+            speakGoody("Time is up! Nobody stepped onto Podium 2. All game modes are now unlocked on the studio screen—choose Solo, versus Goody, or 2-Player mode!");
+          }
+        }, 1000);
+      });
+    }
     function broadcastBoardState() {
       pushAuthoritativeState();
       connectedDataConns.forEach(c => {
@@ -2671,6 +2745,32 @@ function renderStageQuestionBoard() {
       qBoardCtx.font = 'bold 13px monospace';
       qBoardCtx.fillText(allowSoloAndGoody ? "TAP ANY OPTION OR PRESS 1, 2, 3" : "TAP [3] OR PRESS 3 TO START 2-PLAYER", 256, 315);
     }
+    } else if (gameState === "WAITING_FOR_P2") {
+    qBoardCtx.fillStyle = '#ffda66';
+    qBoardCtx.font = 'bold 23px sans-serif';
+    qBoardCtx.textAlign = 'center';
+    qBoardCtx.fillText("2-PLAYER MODE SELECTED", 256, 52);
+
+    qBoardCtx.fillStyle = '#00f0ff';
+    qBoardCtx.fillRect(36, 68, 440, 2);
+
+    qBoardCtx.fillStyle = '#ffffff';
+    qBoardCtx.font = 'bold 17px sans-serif';
+    qBoardCtx.fillText("STEP ONTO PODIUM 2 TO JOIN THE SHOW!", 256, 125);
+
+    if (isP2JoinTimerActive) {
+      qBoardCtx.fillStyle = '#ff7675';
+      qBoardCtx.font = 'bold 54px monospace';
+      qBoardCtx.fillText(`${p2JoinCountdown}s`, 256, 205);
+
+      qBoardCtx.fillStyle = '#39ff14';
+      qBoardCtx.font = 'bold 14px monospace';
+      qBoardCtx.fillText("WAITING FOR CONTESTANT 2...", 256, 260);
+    } else {
+      qBoardCtx.fillStyle = '#00f0ff';
+      qBoardCtx.font = 'bold 16px monospace';
+      qBoardCtx.fillText("LISTEN TO GOODY'S ANNOUNCEMENT...", 256, 195);
+    }
   } else if (gameState === "OPENING_DUEL") {
     qBoardCtx.fillStyle = '#ffda66';
     qBoardCtx.font = 'bold 22px sans-serif';
@@ -3558,7 +3658,23 @@ function animate() {
 
   isLocalOnPodium1 = distP1 < 0.65;
   isLocalOnPodium2 = distP2 < 0.65;
-
+if (isLocalHost && gameState === "WAITING_FOR_P2") {
+    let p2JoinedNow = isLocalOnPodium2 && !isLocalOnPodium1;
+    remotePlushies.forEach((entry) => {
+      if (entry.mesh && entry.mesh.position.distanceTo(p2Pos) < 0.65) {
+        p2JoinedNow = true;
+      }
+    });
+    if (p2JoinedNow) {
+      stopPodium2JoinWait();
+      gameState = "INTRO_SPEECH";
+      renderStageQuestionBoard();
+      pushAuthoritativeState();
+      speakGoody("Player 2 has stepped up to Podium 2! Let's roll our dice to see who goes first!", () => {
+        beginTenSecondDiceDuel();
+      });
+    }
+  }
   if ((isLocalOnPodium1 !== prevPodium1) || (isLocalOnPodium2 !== prevPodium2)) {
     if (isLocalOnPodium1 && lastPodiumClaimed !== 1 && socket && socket.connected) {
       lastPodiumClaimed = 1;
