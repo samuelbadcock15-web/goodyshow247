@@ -277,7 +277,7 @@
       }
     }
 
-    function pushAuthoritativeState() {
+function pushAuthoritativeState() {
       if (!isLocalHost || !socket || !socket.connected) return;
       socket.emit('sync_game_state', {
         studioRoomCode,
@@ -305,6 +305,7 @@
         questionTimer,
         isQuestionTimerActive,
         isTieBreakerActive,
+        isDropoutRecoveryPrompt: !!window.isDropoutRecoveryPrompt,
         contestantNames
       });
     }
@@ -366,7 +367,7 @@
         if (typeof renderWallClockTexture === 'function') renderWallClockTexture(timeStr);
       }
 
-      isTimeExpired = !!state.isTimeExpired;
+     isTimeExpired = !!state.isTimeExpired;
       activeQuestion = state.activeQuestion || null;
       activeRecap = state.activeRecap || null;
       stageSelectedOption = state.stageSelectedOption || null;
@@ -374,6 +375,7 @@
       questionTimer = typeof state.questionTimer === 'number' ? state.questionTimer : 0;
       isQuestionTimerActive = !!state.isQuestionTimerActive;
       isTieBreakerActive = !!state.isTieBreakerActive;
+      window.isDropoutRecoveryPrompt = !!state.isDropoutRecoveryPrompt;
 
       updateHudStatusBanner();
       if (typeof renderStageQuestionBoard === 'function') renderStageQuestionBoard();
@@ -2311,7 +2313,8 @@ const wallClockMesh = new THREE.Mesh(
   new THREE.PlaneGeometry(2.4, 1.2),
   new THREE.MeshBasicMaterial({ map: wallClockTex })
 );
-wallClockMesh.position.set(0, 6.2, -4.4);
+wallClockMesh.position.set(4.8, 2.05, -3.2);
+wallClockMesh.rotation.y = -0.75;
 miniDiorama.add(wallClockMesh);
 
 const COUNTRIES = [
@@ -2628,31 +2631,35 @@ function renderStageQuestionBoard() {
     qBoardCtx.fillStyle = '#ffda66';
     qBoardCtx.font = 'bold 24px sans-serif';
     qBoardCtx.textAlign = 'center';
-    qBoardCtx.fillText("CHOOSE GAME MODE", 256, 50);
+    qBoardCtx.fillText(window.isDropoutRecoveryPrompt ? "PLAYER LEFT - CHOOSE NEXT MODE" : "CHOOSE GAME MODE", 256, 50);
 
     qBoardCtx.fillStyle = '#00f0ff';
     qBoardCtx.fillRect(36, 66, 440, 2);
 
-    if (!isLocalOnPodium1) {
+    const canInteractPrompt = isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2);
+
+    if (!canInteractPrompt) {
       qBoardCtx.fillStyle = '#ff7675';
       qBoardCtx.font = 'bold 16px sans-serif';
       qBoardCtx.fillText("STEP ON PODIUM 1 WITH YOUR PLUSHIE TO UNLOCK!", 256, 180);
     } else {
+      const allowSoloAndGoody = !!window.isDropoutRecoveryPrompt;
+
       qBoardCtx.fillStyle = '#ffffff';
       qBoardCtx.font = '15px sans-serif';
-      qBoardCtx.fillText("SELECT START MODE (TAP OR PRESS 1-3):", 256, 105);
+      qBoardCtx.fillText(allowSoloAndGoody ? "ALL MODES UNLOCKED (TAP OR PRESS 1-3):" : "INITIAL START: SELECT 2-PLAYER MODE:", 256, 105);
 
-      qBoardCtx.fillStyle = '#3498db';
+      qBoardCtx.fillStyle = allowSoloAndGoody ? '#3498db' : '#2c3e50';
       qBoardCtx.fillRect(40, 125, 432, 42);
-      qBoardCtx.fillStyle = '#ffffff';
+      qBoardCtx.fillStyle = allowSoloAndGoody ? '#ffffff' : '#7f8c8d';
       qBoardCtx.font = 'bold 16px monospace';
-      qBoardCtx.fillText("[1] 1-PLAYER SOLO RACE", 256, 152);
+      qBoardCtx.fillText(allowSoloAndGoody ? "[1] 1-PLAYER SOLO RACE" : "[1] 1-PLAYER SOLO (LOCKED AT START)", 256, 152);
 
-      qBoardCtx.fillStyle = '#e74c3c';
+      qBoardCtx.fillStyle = allowSoloAndGoody ? '#e74c3c' : '#2c3e50';
       qBoardCtx.fillRect(40, 178, 432, 42);
-      qBoardCtx.fillStyle = '#ffffff';
+      qBoardCtx.fillStyle = allowSoloAndGoody ? '#ffffff' : '#7f8c8d';
       qBoardCtx.font = 'bold 16px monospace';
-      qBoardCtx.fillText("[2] 1-PLAYER VS GOODY", 256, 205);
+      qBoardCtx.fillText(allowSoloAndGoody ? "[2] 1-PLAYER VS GOODY" : "[2] 1-PLAYER VS GOODY (LOCKED)", 256, 205);
 
       qBoardCtx.fillStyle = '#9b59b6';
       qBoardCtx.fillRect(40, 231, 432, 42);
@@ -2662,7 +2669,7 @@ function renderStageQuestionBoard() {
 
       qBoardCtx.fillStyle = '#39ff14';
       qBoardCtx.font = 'bold 13px monospace';
-      qBoardCtx.fillText("TAP ANY OPTION OR USE 1, 2, 3", 256, 315);
+      qBoardCtx.fillText(allowSoloAndGoody ? "TAP ANY OPTION OR PRESS 1, 2, 3" : "TAP [3] OR PRESS 3 TO START 2-PLAYER", 256, 315);
     }
   } else if (gameState === "OPENING_DUEL") {
     qBoardCtx.fillStyle = '#ffda66';
@@ -2927,7 +2934,7 @@ const qBoardMesh = new THREE.Mesh(
   new THREE.PlaneGeometry(3.6, 2.7),
   new THREE.MeshBasicMaterial({ map: qBoardTex })
 );
-qBoardMesh.position.set(-4.8, 3.4, -3.2);
+qBoardMesh.position.set(-4.8, 2.05, -3.2);
 qBoardMesh.rotation.y = 0.8;
 miniDiorama.add(qBoardMesh);
 
@@ -2974,36 +2981,50 @@ function handleScreenTap(clientX, clientY) {
   mouse.y = -(clientY / window.innerHeight) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
-  const interactiveTargets = [screenClickMesh, qBoardMesh, studioBackScreenMesh];
-  const intersects = raycaster.intersectObjects(interactiveTargets, false);
+  // Raycast specifically against the main studio board so UV coordinates map 1-to-1 to the 512x384 canvas
+  const boardTargets = [screenClickMesh, qBoardMesh];
+  const boardHits = raycaster.intersectObjects(boardTargets, false);
 
-  if (intersects.length > 0) {
-    const hit = intersects[0];
+  if (boardHits.length > 0) {
+    const hit = boardHits[0];
+    const uv = hit.uv;
+    const canvasX = uv ? uv.x * 512 : 256;
+    const canvasY = uv ? (1 - uv.y) * 384 : -1;
 
-    if (gameState === "MODE_PROMPT" && isLocalOnPodium1) {
-      const uv = hit.uv;
-      let selectedMode = "SOLO";
-      if (uv) {
-        if (uv.y > 0.60) selectedMode = "SOLO";
-        else if (uv.y > 0.40) selectedMode = "GOODY";
-        else selectedMode = "TWOPLAYER";
+    const canInteractPrompt = isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2);
+
+    if (gameState === "MODE_PROMPT" && canInteractPrompt && canvasY >= 0) {
+      const allowSoloAndGoody = !!window.isDropoutRecoveryPrompt;
+      if (canvasX >= 40 && canvasX <= 472) {
+        if (canvasY >= 125 && canvasY <= 167 && allowSoloAndGoody) {
+          chooseHostGameMode("SOLO");
+          return;
+        }
+        if (canvasY >= 178 && canvasY <= 220 && allowSoloAndGoody) {
+          chooseHostGameMode("GOODY");
+          return;
+        }
+        if (canvasY >= 231 && canvasY <= 273) {
+          chooseHostGameMode("TWOPLAYER");
+          return;
+        }
       }
-      chooseHostGameMode(selectedMode);
       return;
     }
 
-    if (activeQuestion) {
-      const uv = hit.uv;
-      if (uv && uv.y < 0.5) {
-        const optIdx = Math.floor((0.5 - uv.y) / 0.12);
-        if (optIdx >= 0 && optIdx < activeQuestion.options.length) {
+    if (activeQuestion && canvasY >= 0) {
+      // Exact pixel match for Option boxes: optY = 210 + (idx * 40), rect top = optY - 24, height = 32
+      for (let idx = 0; idx < activeQuestion.options.length; idx++) {
+        const boxTop = (210 + idx * 40) - 24;
+        const boxBottom = boxTop + 32;
+        if (canvasX >= 20 && canvasX <= 492 && canvasY >= boxTop && canvasY <= boxBottom) {
           if (!isLocalHost) {
             if (socket && socket.connected) {
-              socket.emit('client_action', { type: 'ANSWER_QUESTION', optionIndex: optIdx });
+              socket.emit('client_action', { type: 'ANSWER_QUESTION', optionIndex: idx });
             }
             return;
           }
-          const chosenOpt = activeQuestion.options[optIdx];
+          const chosenOpt = activeQuestion.options[idx];
           stageSelectedOption = chosenOpt;
           stageOptionStatus = 'selected';
           renderStageQuestionBoard();
@@ -3015,12 +3036,19 @@ function handleScreenTap(clientX, clientY) {
           return;
         }
       }
+      return;
     }
 
     triggerRollAction();
+    return;
+  }
+
+  // Also allow tapping the contestant back screen to stop/roll dice
+  const backHits = raycaster.intersectObject(studioBackScreenMesh, false);
+  if (backHits.length > 0 && !activeQuestion && gameState !== "MODE_PROMPT") {
+    triggerRollAction();
   }
 }
-
 window.addEventListener('pointerup', (e) => {
   if (e.target && e.target.closest && e.target.closest('#mobile-controls')) return;
   handleScreenTap(e.clientX, e.clientY);
@@ -3124,9 +3152,11 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyA' || e.code === 'ArrowLeft') moveState.turnLeft = true;
   if (e.code === 'KeyD' || e.code === 'ArrowRight') moveState.turnRight = true;
 
-  if (gameState === "MODE_PROMPT" && isLocalOnPodium1) {
-    if (e.key === '1') chooseHostGameMode("SOLO");
-    if (e.key === '2') chooseHostGameMode("GOODY");
+  const canInteractPrompt = isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2);
+  if (gameState === "MODE_PROMPT" && canInteractPrompt) {
+    const allowSoloAndGoody = !!window.isDropoutRecoveryPrompt;
+    if (e.key === '1' && allowSoloAndGoody) chooseHostGameMode("SOLO");
+    if (e.key === '2' && allowSoloAndGoody) chooseHostGameMode("GOODY");
     if (e.key === '3') chooseHostGameMode("TWOPLAYER");
   }
 });
@@ -3333,7 +3363,7 @@ function renderBackstageScreens() {
 }
 
 const studioBackScreenMesh = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 2.8), new THREE.MeshBasicMaterial({ map: studioScreenTex }));
-studioBackScreenMesh.position.set(0, 3.4, -4.5); miniDiorama.add(studioBackScreenMesh);
+studioBackScreenMesh.position.set(0, 2.05, -4.5); miniDiorama.add(studioBackScreenMesh);
 
 const miniGoody = new THREE.Group();
 const silverMetalMat = new THREE.MeshStandardMaterial({
@@ -3536,6 +3566,18 @@ function animate() {
     } else if (isLocalOnPodium2 && lastPodiumClaimed !== 2 && socket && socket.connected) {
       lastPodiumClaimed = 2;
       socket.emit('client_action', { type: 'CLAIM_PODIUM', slot: 2 });
+    }
+
+    // If a player steps off Podium 1 or Podium 2 during an active 2-player game, unlock options 1, 2, 3
+    if (studioPower && !isSoloMode && !isVsGoodyMode && gameState === "IN_PLAY") {
+      if ((prevPodium1 && !isLocalOnPodium1) || (prevPodium2 && !isLocalOnPodium2)) {
+        window.isDropoutRecoveryPrompt = true;
+        studioPower = false;
+        gameState = "MODE_PROMPT";
+        updateHudStatusBanner();
+        renderStageQuestionBoard();
+        pushAuthoritativeState();
+      }
     }
 
     if (!studioPower && gameState === "MODE_PROMPT") {
