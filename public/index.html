@@ -152,7 +152,9 @@
     let lastEmitMoveTime = 0;
     let lastPodiumClaimed = 0;
     let podiumCooldownUntil = 0;
-
+let lockedP1SocketId = null;
+    let lockedP2SocketId = null;
+    let p2InviteAttempts = 0;
 function getPodiumCooldownRemaining() {
       return Math.max(0, Math.ceil((podiumCooldownUntil - Date.now()) / 1000));
     }
@@ -329,6 +331,9 @@ function pushAuthoritativeState() {
         isDropoutRecoveryPrompt: !!window.isDropoutRecoveryPrompt,
         p2JoinCountdown,
         isP2JoinTimerActive,
+        lockedP1SocketId,
+     lockedP2SocketId,
+     p2InviteAttempts,
         contestantNames
       });
     }
@@ -401,7 +406,9 @@ isTimeExpired = !!state.isTimeExpired;
       window.isDropoutRecoveryPrompt = !!state.isDropoutRecoveryPrompt;
       p2JoinCountdown = typeof state.p2JoinCountdown === 'number' ? state.p2JoinCountdown : 10;
       isP2JoinTimerActive = !!state.isP2JoinTimerActive;
-
+lockedP1SocketId = state.lockedP1SocketId || null;
+   lockedP2SocketId = state.lockedP2SocketId || null;
+   p2InviteAttempts = typeof state.p2InviteAttempts === 'number' ? state.p2InviteAttempts : 0;
       updateHudStatusBanner();
       if (typeof renderStageQuestionBoard === 'function') renderStageQuestionBoard();
       if (typeof renderBackstageScreens === 'function') renderBackstageScreens();
@@ -590,7 +597,7 @@ isTimeExpired = !!state.isTimeExpired;
       socket.on('remote_client_action', (action) => {
         if (!isLocalHost) return;
         if (action.type === 'MODE_SELECT' && gameState === "MODE_PROMPT") {
-          chooseHostGameMode(action.modeType);
+          chooseHostGameMode(action.modeType, action.senderId || null);
         } else if (action.type === 'ROLL_DICE') {
           triggerRollAction();
         } else if (action.type === 'ANSWER_QUESTION' && activeQuestion) {
@@ -646,13 +653,31 @@ isTimeExpired = !!state.isTimeExpired;
       }, 500);
     }
 
-    function chooseHostGameMode(modeType) {
+    function chooseHostGameMode(modeType, requesterSocketId = null) {
       if (studioPower) return;
+      if (modeType === "TWOPLAYER" && p2InviteAttempts >= 2) return;
+
       if (!isLocalHost) {
         if (socket && socket.connected) {
-          socket.emit('client_action', { type: 'MODE_SELECT', modeType });
+          socket.emit('client_action', { type: 'MODE_SELECT', modeType, senderId: selfSocketId });
         }
         return;
+      }
+
+      // Lock whoever is currently on Podium 1 onto Podium 1 for the entire game
+      if (!lockedP1SocketId) {
+        if (requesterSocketId) {
+          lockedP1SocketId = requesterSocketId;
+        } else if (isLocalOnPodium1) {
+          lockedP1SocketId = selfSocketId;
+        } else {
+          const p1PosCheck = new THREE.Vector3(-1.6, 0.44, -2.2);
+          remotePlushies.forEach((entry, id) => {
+            if (!lockedP1SocketId && entry.mesh && entry.mesh.position.distanceTo(p1PosCheck) < 0.75) {
+              lockedP1SocketId = id;
+            }
+          });
+        }
       }
 
       if (modeType === "SOLO") {
@@ -755,6 +780,7 @@ isTimeExpired = !!state.isTimeExpired;
 
           if (p2JoinCountdown <= 0) {
             stopPodium2JoinWait();
+            p2InviteAttempts++;
             window.isDropoutRecoveryPrompt = true;
             studioPower = false;
             gameState = "MODE_PROMPT";
@@ -764,7 +790,10 @@ isTimeExpired = !!state.isTimeExpired;
             renderStageQuestionBoard();
             pushAuthoritativeState();
 
-            speakGoody("Time is up! Nobody stepped onto Podium 2. All game modes are now unlocked on the studio screen—choose Solo, versus Goody, or 2-Player mode!");
+            const timeoutSpeech = p2InviteAttempts >= 2
+              ? "Time is up again! No one stepped onto Podium 2. 2-Player mode is now disabled—choose 1-Player Solo or 1-Player versus Goody!"
+              : "Time is up! Nobody stepped onto Podium 2. All game modes are now unlocked on the studio screen—you have one more chance to try 2-Player mode, or choose Solo or versus Goody!";
+            speakGoody(timeoutSpeech);
           }
         }, 1000);
       });
@@ -2278,6 +2307,10 @@ function triggerFinishLineVictory(winnerName, loserName) {
 }
 
 function broadcastGameOver(winnerName, reason) {
+  lockedP1SocketId = null;
+  lockedP2SocketId = null;
+  p2InviteAttempts = 0;
+  pushAuthoritativeState();
   connectedDataConns.forEach(c => {
     if (c.open) c.send({ type: "GAME_OVER", winner: winnerName, reason: reason });
   });
@@ -2772,15 +2805,19 @@ function renderStageQuestionBoard() {
       qBoardCtx.font = 'bold 16px monospace';
       qBoardCtx.fillText(allowSoloAndGoody ? "[2] 1-PLAYER VS GOODY" : "[2] 1-PLAYER VS GOODY (LOCKED)", 256, 205);
 
-      qBoardCtx.fillStyle = '#9b59b6';
-      qBoardCtx.fillRect(40, 231, 432, 42);
-      qBoardCtx.fillStyle = '#ffffff';
-      qBoardCtx.font = 'bold 16px monospace';
-      qBoardCtx.fillText("[3] 2-PLAYER MODE", 256, 258);
+      const allowTwoPlayer = p2InviteAttempts < 2;
+   qBoardCtx.fillStyle = allowTwoPlayer ? '#9b59b6' : '#2c3e50';
+   qBoardCtx.fillRect(40, 231, 432, 42);
+   qBoardCtx.fillStyle = allowTwoPlayer ? '#ffffff' : '#7f8c8d';
+   qBoardCtx.font = 'bold 16px monospace';
+   qBoardCtx.fillText(allowTwoPlayer ? "[3] 2-PLAYER MODE" : "[3] 2-PLAYER MODE (DISABLED)", 256, 258);
 
-      qBoardCtx.fillStyle = '#39ff14';
-      qBoardCtx.font = 'bold 13px monospace';
-      qBoardCtx.fillText(allowSoloAndGoody ? "TAP ANY OPTION OR PRESS 1, 2, 3" : "TAP [3] OR PRESS 3 TO START 2-PLAYER", 256, 315);
+   qBoardCtx.fillStyle = '#39ff14';
+   qBoardCtx.font = 'bold 13px monospace';
+   const hintTxt = !allowTwoPlayer
+     ? "TAP [1] SOLO OR [2] VS GOODY"
+     : (allowSoloAndGoody ? "TAP ANY OPTION OR PRESS 1, 2, 3" : "TAP [3] OR PRESS 3 TO START 2-PLAYER");
+   qBoardCtx.fillText(hintTxt, 256, 315);
     }
     } else if (gameState === "WAITING_FOR_P2") {
     qBoardCtx.fillStyle = '#ffda66';
@@ -3141,7 +3178,7 @@ function handleScreenTap(clientX, clientY) {
           chooseHostGameMode("GOODY");
           return;
         }
-        if (canvasY >= 231 && canvasY <= 273) {
+        if (canvasY >= 231 && canvasY <= 273 && p2InviteAttempts < 2) {
           chooseHostGameMode("TWOPLAYER");
           return;
         }
@@ -3294,7 +3331,7 @@ document.addEventListener('keydown', (e) => {
     const allowSoloAndGoody = !!window.isDropoutRecoveryPrompt;
     if (e.key === '1' && allowSoloAndGoody) chooseHostGameMode("SOLO");
     if (e.key === '2' && allowSoloAndGoody) chooseHostGameMode("GOODY");
-    if (e.key === '3') chooseHostGameMode("TWOPLAYER");
+    if (e.key === '3' && p2InviteAttempts < 2) chooseHostGameMode("TWOPLAYER");
   }
 });
 
