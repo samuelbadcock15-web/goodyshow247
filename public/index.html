@@ -724,9 +724,11 @@ lockedP1SocketId = state.lockedP1SocketId || null;
         // Check if another plushie is already standing on Podium 2
         const p2PosCheck = new THREE.Vector3(1.6, 0.44, -2.2);
         let p2Occupied = isLocalOnPodium2 && !isLocalOnPodium1;
-        remotePlushies.forEach((entry) => {
+        if (p2Occupied) lockedP2SocketId = selfSocketId;
+        remotePlushies.forEach((entry, id) => {
           if (entry.mesh && entry.mesh.position.distanceTo(p2PosCheck) < 0.65) {
             p2Occupied = true;
+            if (!lockedP2SocketId) lockedP2SocketId = id;
           }
         });
 
