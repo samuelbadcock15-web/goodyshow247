@@ -67,13 +67,23 @@
       position: fixed;
       bottom: 95px;
       left: 65px;
+      right: 65px;
+      justify-content: space-between;
+      align-items: flex-end;
       pointer-events: none;
       z-index: 35;
     }
-    .dpad-grid {
+    .dpad-vertical {
       display: grid;
-      grid-template-columns: repeat(3, 136px);
+      grid-template-columns: 136px;
       grid-template-rows: repeat(2, 136px);
+      gap: 14px;
+      pointer-events: auto;
+    }
+    .dpad-horizontal {
+      display: grid;
+      grid-template-columns: repeat(2, 136px);
+      grid-template-rows: 136px;
       gap: 14px;
       pointer-events: auto;
     }
@@ -119,12 +129,12 @@
   <div id="mobile-crosshair"></div>
 
   <div id="mobile-controls">
-    <div class="dpad-grid">
-      <div></div>
+    <div class="dpad-vertical">
       <div class="m-btn" id="btn-m-fwd" role="button" aria-label="Forward">▲</div>
-      <div></div>
-      <div class="m-btn" id="btn-m-left" role="button" aria-label="Turn Left">◀</div>
       <div class="m-btn" id="btn-m-back" role="button" aria-label="Backward">▼</div>
+    </div>
+    <div class="dpad-horizontal">
+      <div class="m-btn" id="btn-m-left" role="button" aria-label="Turn Left">◀</div>
       <div class="m-btn" id="btn-m-right" role="button" aria-label="Turn Right">▶</div>
     </div>
   </div>
