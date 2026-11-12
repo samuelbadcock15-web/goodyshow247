@@ -5,11 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>The Goody Tonight Show - Live Studio Host</title>
   <style>
+    * {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+    }
     body, html {
       margin: 0; padding: 0; width: 100%; height: 100%;
       overflow: hidden; background-color: #05020a;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      touch-action: manipulation;
+      touch-action: none;
     }
     #canvas3d { width: 100%; height: 100%; display: block; cursor: pointer; }
 
@@ -763,43 +769,45 @@ lockedP1SocketId = state.lockedP1SocketId || null;
       renderStageQuestionBoard();
       pushAuthoritativeState();
 
-      // Speech-first: Goody speaks BEFORE the 10-second countdown starts ticking
       const inviteSpeech = `Welcome to The Goody Tonight Show! Player 1 is ready at Podium 1. Someone step onto Podium 2 within 10 seconds to join the battle!`;
-      speakGoody(inviteSpeech, () => {
+      setTimeout(() => {
         if (gameState !== "WAITING_FOR_P2" || !isLocalHost) return;
-        p2JoinCountdown = 10;
-        isP2JoinTimerActive = true;
-        renderStageQuestionBoard();
-        pushAuthoritativeState();
-
-        p2JoinInterval = setInterval(() => {
-          if (!isLocalHost || gameState !== "WAITING_FOR_P2") {
-            stopPodium2JoinWait();
-            return;
-          }
-          p2JoinCountdown--;
+        speakGoody(inviteSpeech, () => {
+          if (gameState !== "WAITING_FOR_P2" || !isLocalHost) return;
+          p2JoinCountdown = 10;
+          isP2JoinTimerActive = true;
           renderStageQuestionBoard();
           pushAuthoritativeState();
 
-          if (p2JoinCountdown <= 0) {
-            stopPodium2JoinWait();
-            p2InviteAttempts++;
-            window.isDropoutRecoveryPrompt = true;
-            studioPower = false;
-            gameState = "MODE_PROMPT";
-            updateStudioLighting(false);
-            updateCameraAlignment();
-            updateHudStatusBanner();
+          p2JoinInterval = setInterval(() => {
+            if (!isLocalHost || gameState !== "WAITING_FOR_P2") {
+              stopPodium2JoinWait();
+              return;
+            }
+            p2JoinCountdown--;
             renderStageQuestionBoard();
             pushAuthoritativeState();
 
-            const timeoutSpeech = p2InviteAttempts >= 2
-              ? "Time is up again! No one stepped onto Podium 2. 2-Player mode is now disabled—choose 1-Player Solo or 1-Player versus Goody!"
-              : "Time is up! Nobody stepped onto Podium 2. All game modes are now unlocked on the studio screen—you have one more chance to try 2-Player mode, or choose Solo or versus Goody!";
-            speakGoody(timeoutSpeech);
-          }
-        }, 1000);
-      });
+            if (p2JoinCountdown <= 0) {
+              stopPodium2JoinWait();
+              p2InviteAttempts++;
+              window.isDropoutRecoveryPrompt = true;
+              studioPower = false;
+              gameState = "MODE_PROMPT";
+              updateStudioLighting(false);
+              updateCameraAlignment();
+              updateHudStatusBanner();
+              renderStageQuestionBoard();
+              pushAuthoritativeState();
+
+              const timeoutSpeech = p2InviteAttempts >= 2
+                ? "Time is up again! No one stepped onto Podium 2. 2-Player mode is now disabled—choose 1-Player Solo or 1-Player versus Goody!"
+                : "Time is up! Nobody stepped onto Podium 2. All game modes are now unlocked on the studio screen—you have one more chance to try 2-Player mode, or choose Solo or versus Goody!";
+              speakGoody(timeoutSpeech);
+            }
+          }, 1000);
+        });
+      }, 250);
     }
     function broadcastBoardState() {
       pushAuthoritativeState();
@@ -2766,7 +2774,7 @@ function renderStageQuestionBoard() {
     qBoardCtx.fillRect(36, 66, 440, 2);
 
     const cooldownSecs = getPodiumCooldownRemaining();
-    const limitReached = hasReachedSessionGameLimit();
+    const limitReached = !window.isDropoutRecoveryPrompt && hasReachedSessionGameLimit();
     const canInteractPrompt = !limitReached && (cooldownSecs === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
 
     if (limitReached && (isLocalOnPodium1 || isLocalOnPodium2)) {
@@ -3226,6 +3234,7 @@ function handleScreenTap(clientX, clientY) {
     triggerRollAction();
   }
 }
+window.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('pointerup', (e) => {
   if (e.target && e.target.closest && e.target.closest('#mobile-controls')) return;
   handleScreenTap(e.clientX, e.clientY);
