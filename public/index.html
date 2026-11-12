@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>The Goody Tonight Show - Live Studio Host</title>
   <style>
     body, html {
@@ -18,6 +19,7 @@
       font-family: monospace; font-size: 0.85rem; pointer-events: none; z-index: 20;
       box-shadow: 0 0 20px rgba(255, 121, 176, 0.25);
     }
+    #net-role-pill { margin-top: 4px; font-weight: bold; color: #00f0ff; font-size: 0.85rem; }
     #room-code-pill { margin-top: 5px; font-weight: bold; color: #39ff14; font-size: 0.95rem; }
     #countdown-pill { margin-top: 6px; font-weight: bold; color: #ffda66; font-size: 0.95rem; }
     #match-clock-hud { margin-top: 4px; font-weight: bold; color: #00f0ff; font-size: 0.95rem; }
@@ -30,16 +32,105 @@
       z-index: 25; text-align: center; box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
       pointer-events: none;
     }
+
+    /* Mobile-Only Crosshair & Touch Controls (Hidden on PC/Desktop) */
+    #mobile-crosshair {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 26px; height: 26px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 30;
+    }
+    #mobile-crosshair::before, #mobile-crosshair::after {
+      content: "";
+      position: absolute;
+      background: #00f0ff;
+      box-shadow: 0 0 6px #39ff14;
+    }
+    #mobile-crosshair::before {
+      top: 12px; left: 0; width: 26px; height: 2px;
+    }
+    #mobile-crosshair::after {
+      left: 12px; top: 0; width: 2px; height: 26px;
+    }
+
+    #mobile-controls {
+      display: none;
+      position: fixed;
+      bottom: 72px;
+      left: 16px;
+      right: 16px;
+      justify-content: space-between;
+      align-items: flex-end;
+      pointer-events: none;
+      z-index: 35;
+    }
+    .dpad-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 48px);
+      grid-template-rows: repeat(2, 48px);
+      gap: 6px;
+      pointer-events: auto;
+    }
+    .m-btn {
+      background: rgba(22, 9, 44, 0.88);
+      border: 2px solid #00f0ff;
+      border-radius: 10px;
+      color: #fff;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    .m-btn:active {
+      background: #00f0ff;
+      color: #05020a;
+    }
+    #mobile-action-btn {
+      pointer-events: auto;
+      padding: 14px 18px;
+      border-color: #39ff14;
+      color: #39ff14;
+      font-size: 0.9rem;
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+      #mobile-crosshair { display: block; }
+      #mobile-controls { display: flex; }
+      #mode-banner { font-size: 0.75rem; padding: 6px 12px; bottom: 10px; }
+    }
   </style>
 </head>
 <body>
   <div id="hud">
     <div class="hud-title" id="mode-title" style="color: #ffda66;">STUDIO FLOOR WORKSHOP</div>
     <div class="hud-sub" id="mode-sub">Third-Person Follow Mode: Active • Tap Studio Screen to Stop Dice</div>
+    <div id="net-role-pill">NET: <span id="net-role-val" style="color:#ffda66;">CONNECTING TO RENDER...</span></div>
     <div id="room-code-pill">CODE: <span id="hud-code-val">----</span></div>
     <div id="countdown-pill">STATUS: <span id="timer-val" style="color:#ffda66;">SELECT GAME MODE (STEP ON PODIUM 1)</span></div>
     <div id="match-clock-hud">SHOW CLOCK: <span id="game-clock-val" style="color:#ffda66;">20:00</span></div>
     <div id="audience-pill">AUDIENCE WATCHING: <span id="audience-count" style="color:#39ff14;">1</span></div>
+  </div>
+
+  <div id="mobile-crosshair"></div>
+
+  <div id="mobile-controls">
+    <div class="dpad-grid">
+      <div></div>
+      <button class="m-btn" id="btn-m-fwd">▲</button>
+      <div></div>
+      <button class="m-btn" id="btn-m-left">◀</button>
+      <button class="m-btn" id="btn-m-back">▼</button>
+      <button class="m-btn" id="btn-m-right">▶</button>
+    </div>
+    <button class="m-btn" id="mobile-action-btn">🎯 TAP TARGET</button>
   </div>
 
   <div id="mode-banner">
@@ -50,22 +141,29 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://goodyshow247.onrender.com/socket.io/socket.io.js"></script>
 
   <script>
     let isHostAuthorized = true;
+    let isLocalHost = false;
+    let selfSocketId = null;
+    let socket = null;
+    const remotePlushies = new Map();
+    let lastEmitMoveTime = 0;
+    let lastPodiumClaimed = 0;
 
     function unlockHostEnvironment() {
       isHostAuthorized = true;
       initAudio();
       initStudioWebRTC();
-      triggerImmediateModePrompt();
+      initSocketMultiplayer();
     }
 
     window.addEventListener('DOMContentLoaded', () => {
       unlockHostEnvironment();
     });
 
-    const studioRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
+    let studioRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
     document.getElementById('hud-code-val').textContent = studioRoomCode;
 
     let currentMode = 'BEDROOM';
@@ -125,6 +223,7 @@
     const audienceCountEl = document.getElementById('audience-count');
     const countdownPill = document.getElementById('countdown-pill');
     const timerValEl = document.getElementById('timer-val');
+    const netRoleValEl = document.getElementById('net-role-val');
 
     const contestantRotations = {
       "goody-contestant-1": { yaw: 0, pitch: -0.15 },
@@ -165,13 +264,351 @@
 
     const spectatorPlushies = new Map();
 
+    function updateHudStatusBanner() {
+      if (gameState === "MODE_PROMPT") {
+        countdownPill.innerHTML = `STATUS: <span style="color:#ffda66;">SELECT GAME MODE (STEP ON PODIUM 1)</span>`;
+      } else if (gameState === "OPENING_DUEL") {
+        countdownPill.innerHTML = `STATUS: <span style="color:#00f0ff;">OPENING DICE ROLL!</span>`;
+      } else if (gameState === "IN_PLAY") {
+        const label = isSoloMode ? "SOLO RACE ACTIVE!" : (isVsGoodyMode ? "GOODY HEAD-TO-HEAD!" : "2-PLAYER SHOW LIVE!");
+        countdownPill.innerHTML = `STATUS: <span style="color:#39ff14;">${label}</span>`;
+      } else if (gameState === "GAME_OVER") {
+        countdownPill.innerHTML = `STATUS: <span style="color:#ff79b0;">SHOW FINISHED</span>`;
+      }
+    }
+
+    function pushAuthoritativeState() {
+      if (!isLocalHost || !socket || !socket.connected) return;
+      socket.emit('sync_game_state', {
+        studioRoomCode,
+        studioPower,
+        gameState,
+        isSoloMode,
+        isVsGoodyMode,
+        goodyPlayerSlot,
+        soloPlayerId,
+        activePlayer,
+        p1Index,
+        p2Index,
+        p1RollVal,
+        p2RollVal,
+        isDiceRollingP1,
+        isDiceRollingP2,
+        diceCountdown,
+        isDiceTimerActive,
+        matchTimerSeconds,
+        isTimeExpired,
+        activeQuestion,
+        activeRecap,
+        stageSelectedOption,
+        stageOptionStatus,
+        questionTimer,
+        isQuestionTimerActive,
+        isTieBreakerActive,
+        contestantNames
+      });
+    }
+
+    function applySyncedRoomState(state) {
+      if (!state) return;
+      if (state.studioRoomCode) {
+        studioRoomCode = state.studioRoomCode;
+        document.getElementById('hud-code-val').textContent = studioRoomCode;
+      }
+
+      const prevPower = studioPower;
+      studioPower = !!state.studioPower;
+      if (studioPower !== prevPower) {
+        updateStudioLighting(studioPower);
+        updateCameraAlignment();
+      }
+
+      gameState = state.gameState || gameState;
+      isSoloMode = !!state.isSoloMode;
+      isVsGoodyMode = !!state.isVsGoodyMode;
+      goodyPlayerSlot = state.goodyPlayerSlot || null;
+      soloPlayerId = state.soloPlayerId || null;
+      activePlayer = state.activePlayer || activePlayer;
+
+      if (state.contestantNames) {
+        contestantNames["goody-contestant-1"] = state.contestantNames["goody-contestant-1"] || "Player 1";
+        contestantNames["goody-contestant-2"] = state.contestantNames["goody-contestant-2"] || "Player 2";
+        if (typeof pawn1 !== 'undefined') updatePawnNameBadge(pawn1, contestantNames["goody-contestant-1"]);
+        if (typeof pawn2 !== 'undefined') updatePawnNameBadge(pawn2, contestantNames["goody-contestant-2"]);
+      }
+
+      if (typeof state.p1Index === 'number' && typeof pawn1 !== 'undefined') {
+        p1Index = state.p1Index;
+        pawn1.visible = studioPower;
+        pawn1.position.set(boardTileCoords[p1Index].x - 0.08, 0.52, boardTileCoords[p1Index].z);
+      }
+
+      if (typeof state.p2Index === 'number' && typeof pawn2 !== 'undefined') {
+        p2Index = state.p2Index;
+        pawn2.visible = studioPower && !isSoloMode;
+        if (window.p2PodiumGroup) window.p2PodiumGroup.visible = !isSoloMode;
+        pawn2.position.set(boardTileCoords[p2Index].x + 0.08, 0.52, boardTileCoords[p2Index].z);
+      }
+
+      p1RollVal = state.p1RollVal !== undefined ? state.p1RollVal : p1RollVal;
+      p2RollVal = state.p2RollVal !== undefined ? state.p2RollVal : p2RollVal;
+      isDiceRollingP1 = !!state.isDiceRollingP1;
+      isDiceRollingP2 = !!state.isDiceRollingP2;
+      diceCountdown = typeof state.diceCountdown === 'number' ? state.diceCountdown : diceCountdown;
+      isDiceTimerActive = !!state.isDiceTimerActive;
+
+      if (typeof state.matchTimerSeconds === 'number') {
+        matchTimerSeconds = state.matchTimerSeconds;
+        const mins = Math.max(0, Math.floor(matchTimerSeconds / 60)).toString().padStart(2, '0');
+        const secs = Math.max(0, (matchTimerSeconds % 60)).toString().padStart(2, '0');
+        const timeStr = `${mins}:${secs}`;
+        gameClockValEl.textContent = timeStr;
+        if (typeof renderWallClockTexture === 'function') renderWallClockTexture(timeStr);
+      }
+
+      isTimeExpired = !!state.isTimeExpired;
+      activeQuestion = state.activeQuestion || null;
+      activeRecap = state.activeRecap || null;
+      stageSelectedOption = state.stageSelectedOption || null;
+      stageOptionStatus = state.stageOptionStatus || null;
+      questionTimer = typeof state.questionTimer === 'number' ? state.questionTimer : 0;
+      isQuestionTimerActive = !!state.isQuestionTimerActive;
+      isTieBreakerActive = !!state.isTieBreakerActive;
+
+      updateHudStatusBanner();
+      if (typeof renderStageQuestionBoard === 'function') renderStageQuestionBoard();
+      if (typeof renderBackstageScreens === 'function') renderBackstageScreens();
+    }
+
+    function createRemoteNameBadge(text) {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 64;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = 'rgba(10, 3, 20, 0.85)';
+      ctx.fillRect(4, 4, 248, 56);
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(4, 4, 248, 56);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 26px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText((text || 'GUEST').toUpperCase().slice(0, 12), 128, 33);
+      const tex = new THREE.CanvasTexture(c);
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.65, 0.16), mat);
+      mesh.position.set(0, 0.95, 0);
+      return mesh;
+    }
+
+    function syncRemotePlayersMap(allPlayers) {
+      if (!allPlayers) return;
+      const activeIds = new Set(Object.keys(allPlayers));
+
+      remotePlushies.forEach((entry, id) => {
+        if (!activeIds.has(id)) {
+          miniDiorama.remove(entry.mesh);
+          remotePlushies.delete(id);
+        }
+      });
+
+      Object.values(allPlayers).forEach((pData) => {
+        if (pData.id === selfSocketId) return;
+        let entry = remotePlushies.get(pData.id);
+        if (!entry) {
+          const mesh = createCutePlushie(pData.color || 0xff7675);
+          const tagMesh = createRemoteNameBadge(pData.name);
+          mesh.add(tagMesh);
+          mesh.userData.nameTagMesh = tagMesh;
+          mesh.position.set(pData.x || 0, pData.y || 0.44, pData.z || 0);
+          miniDiorama.add(mesh);
+          entry = {
+            mesh,
+            targetPos: new THREE.Vector3(pData.x || 0, pData.y || 0.44, pData.z || 0),
+            targetYaw: (pData.yaw || 0) + Math.PI
+          };
+          remotePlushies.set(pData.id, entry);
+        } else {
+          entry.targetPos.set(pData.x, pData.y, pData.z);
+          entry.targetYaw = (pData.yaw || 0) + Math.PI;
+        }
+      });
+    }
+
+    function emitLocalPlushiePosition(force = false) {
+      if (!socket || !socket.connected) return;
+      const now = performance.now();
+      if (!force && now - lastEmitMoveTime < 45) return;
+      lastEmitMoveTime = now;
+      socket.emit('player_move', {
+        x: plushiePosition.x,
+        y: plushiePosition.y,
+        z: plushiePosition.z,
+        yaw: plushieRotation.yaw
+      });
+    }
+
+    function resumeShowAfterHostMigration() {
+      if (!isLocalHost) return;
+      if (gameState === "MODE_PROMPT") {
+        triggerImmediateModePrompt();
+      } else if (gameState === "OPENING_DUEL") {
+        beginTenSecondDiceDuel();
+      } else if (gameState === "IN_PLAY") {
+        startTwentyMinuteMatchTimer();
+        if (activeQuestion) {
+          startQuestionCountdown();
+        } else {
+          startTurnCleanly(activePlayer);
+        }
+      }
+    }
+
+    function initSocketMultiplayer() {
+      if (socket) return;
+      const serverUrl = window.location.hostname.includes('onrender.com')
+        ? window.location.origin
+        : 'https://goodyshow247.onrender.com';
+
+      socket = io(serverUrl, { transports: ['websocket', 'polling'] });
+
+      socket.on('connect', () => {
+        selfSocketId = socket.id;
+        emitLocalPlushiePosition(true);
+      });
+
+      socket.on('init_session', (payload) => {
+        selfSocketId = payload.selfId;
+        isLocalHost = !!payload.isHost;
+        netRoleValEl.textContent = isLocalHost ? "LIVE • SHOWRUNNER HOST" : "LIVE • SYNCED GUEST";
+        netRoleValEl.style.color = isLocalHost ? "#39ff14" : "#00f0ff";
+
+        syncRemotePlayersMap(payload.players);
+        applySyncedRoomState(payload.roomState);
+
+        if (isLocalHost) {
+          if (!studioPower && gameState === "MODE_PROMPT") {
+            triggerImmediateModePrompt();
+          } else {
+            resumeShowAfterHostMigration();
+          }
+        }
+      });
+
+      socket.on('host_assigned', (payload) => {
+        isLocalHost = true;
+        netRoleValEl.textContent = "LIVE • SHOWRUNNER HOST";
+        netRoleValEl.style.color = "#39ff14";
+        if (payload && payload.roomState) {
+          applySyncedRoomState(payload.roomState);
+        }
+        resumeShowAfterHostMigration();
+      });
+
+      socket.on('host_changed', (payload) => {
+        isLocalHost = (payload.hostSocketId === selfSocketId);
+        netRoleValEl.textContent = isLocalHost ? "LIVE • SHOWRUNNER HOST" : "LIVE • SYNCED GUEST";
+        netRoleValEl.style.color = isLocalHost ? "#39ff14" : "#00f0ff";
+      });
+
+      socket.on('update_players', (allPlayers) => {
+        syncRemotePlayersMap(allPlayers);
+      });
+
+      socket.on('player_moved', (pData) => {
+        if (!pData || pData.id === selfSocketId) return;
+        let entry = remotePlushies.get(pData.id);
+        if (!entry) {
+          const mesh = createCutePlushie(pData.color || 0xff7675);
+          const tagMesh = createRemoteNameBadge(pData.name);
+          mesh.add(tagMesh);
+          mesh.userData.nameTagMesh = tagMesh;
+          mesh.position.set(pData.x, pData.y, pData.z);
+          miniDiorama.add(mesh);
+          entry = {
+            mesh,
+            targetPos: new THREE.Vector3(pData.x, pData.y, pData.z),
+            targetYaw: (pData.yaw || 0) + Math.PI
+          };
+          remotePlushies.set(pData.id, entry);
+        } else {
+          entry.targetPos.set(pData.x, pData.y, pData.z);
+          entry.targetYaw = (pData.yaw || 0) + Math.PI;
+        }
+      });
+
+      socket.on('player_disconnected', ({ id }) => {
+        const entry = remotePlushies.get(id);
+        if (entry) {
+          miniDiorama.remove(entry.mesh);
+          remotePlushies.delete(id);
+        }
+      });
+
+      socket.on('audience_count', ({ count }) => {
+        audienceCount = Math.max(1, count || 1);
+        audienceCountEl.textContent = audienceCount;
+      });
+
+      socket.on('sync_game_state', (state) => {
+        if (isLocalHost) return;
+        applySyncedRoomState(state);
+      });
+
+      socket.on('host_speak', ({ text }) => {
+        if (isLocalHost || !text) return;
+        speakGoodyLocalOnly(text);
+      });
+
+      socket.on('remote_client_action', (action) => {
+        if (!isLocalHost) return;
+        if (action.type === 'MODE_SELECT' && gameState === "MODE_PROMPT") {
+          chooseHostGameMode(action.modeType);
+        } else if (action.type === 'ROLL_DICE') {
+          triggerRollAction();
+        } else if (action.type === 'ANSWER_QUESTION' && activeQuestion) {
+          const optIdx = action.optionIndex;
+          if (optIdx >= 0 && optIdx < activeQuestion.options.length) {
+            const chosenOpt = activeQuestion.options[optIdx];
+            stageSelectedOption = chosenOpt;
+            stageOptionStatus = 'selected';
+            renderStageQuestionBoard();
+            pushAuthoritativeState();
+            setTimeout(() => {
+              evaluateAnswer(activePlayer, chosenOpt);
+            }, 800);
+          }
+        }
+      });
+    }
+
+    function speakGoodyLocalOnly(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 0.95;
+      utter.pitch = 1.25;
+      utter.onstart = () => { isGoodySpeaking = true; };
+      utter.onboundary = (e) => {
+        isGoodySpeaking = true;
+        const chunk = text.substring(e.charIndex, e.charIndex + 65);
+        currentSubtitle = chunk.length > 55 ? chunk.substring(0, 55) + "..." : chunk;
+        playTone(460 + Math.random() * 200, 'triangle', 0.05, 0.02);
+      };
+      utter.onend = () => { isGoodySpeaking = false; };
+      utter.onerror = () => { isGoodySpeaking = false; };
+      window.speechSynthesis.speak(utter);
+    }
+
     function triggerImmediateModePrompt() {
-      if (studioPower) return;
+      if (studioPower || !isLocalHost) return;
       gameState = "MODE_PROMPT";
-      countdownPill.innerHTML = `STATUS: <span style="color:#ffda66;">SELECT GAME MODE (STEP ON PODIUM 1)</span>`;
+      updateHudStatusBanner();
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       setTimeout(() => {
+        if (!isLocalHost || studioPower) return;
         speakGoody("Welcome to The Goody Tonight Show! Step up to Podium 1 with your plushie avatar to select your game mode: choose 1-Player Solo race, 1-Player versus Goody, or standard 2-Player mode!", () => {
           if (gameState === "MODE_PROMPT") {
             connectedDataConns.forEach(c => {
@@ -184,6 +621,13 @@
 
     function chooseHostGameMode(modeType) {
       if (studioPower) return;
+      if (!isLocalHost) {
+        if (socket && socket.connected) {
+          socket.emit('client_action', { type: 'MODE_SELECT', modeType });
+        }
+        return;
+      }
+
       if (modeType === "SOLO") {
         isSoloMode = true;
         isVsGoodyMode = false;
@@ -232,6 +676,7 @@
     }
 
     function broadcastBoardState() {
+      pushAuthoritativeState();
       connectedDataConns.forEach(c => {
         if (c.open) {
           c.send({
@@ -318,6 +763,7 @@
 
       countdownPill.innerHTML = `STATUS: <span style="color:#ff7675;">INTERMISSION: WAITING FOR RECONNECT...</span>`;
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       connectedDataConns.forEach(c => {
         if (c.open) c.send({ type: "INTERMISSION_PAUSE", droppedContestant: contestantId });
@@ -382,6 +828,7 @@
 
       countdownPill.innerHTML = `STATUS: <span style="color:#ffda66;">WAITING FOR ${remainingName.toUpperCase()}'S CHOICE...</span>`;
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       const speech = `Welcome back to The Goody Tonight Show! Unfortunately, we have been unable to find a replacement. So ${remainingName}, you can choose to go solo against the 20-minute timer, or battle me, Goody, head-to-head! Make your choice now!`;
       speakGoody(speech, () => {
@@ -416,6 +863,7 @@
       if (gameState === "MODE_PROMPT" || savedGameState === "INTRO_SPEECH" || savedGameState === "OPENING_DUEL" || savedGameState === "IDLE") {
         gameState = "OPENING_DUEL";
         renderStageQuestionBoard();
+        pushAuthoritativeState();
         const speech = `A bold choice! You have chosen to battle me, Goody! I am taking over the board! Let's roll our dice to determine who goes first! You have 10 seconds to roll your dice!`;
         speakGoody(speech, () => {
           beginTenSecondDiceDuel();
@@ -478,6 +926,7 @@
         });
       });
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       const speech = `Resuming on ${country} for ${pName}! Here is your fresh question: ${activeQuestion.q}... You have 30 seconds to lock in!`;
       speakGoody(speech, () => {
@@ -520,6 +969,7 @@
 
       gameState = "IN_PLAY";
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       broadcastMicState("goody-contestant-1", false);
       broadcastMicState("goody-contestant-2", false);
@@ -542,10 +992,16 @@
       diceCountdown = 10;
       isDiceTimerActive = true;
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       diceCountdownInterval = setInterval(() => {
+        if (!isLocalHost) {
+          stopDiceCountdown();
+          return;
+        }
         diceCountdown--;
         renderStageQuestionBoard();
+        pushAuthoritativeState();
         if (diceCountdown <= 0) {
           stopDiceCountdown();
           if (onTimeout) onTimeout();
@@ -578,6 +1034,7 @@
 
       renderStageQuestionBoard();
       renderBackstageScreens();
+      pushAuthoritativeState();
 
       connectedDataConns.forEach(c => {
         if (c.open) c.send({
@@ -604,6 +1061,7 @@
 
       renderStageQuestionBoard();
       renderBackstageScreens();
+      pushAuthoritativeState();
       const rollVal = Math.floor(Math.random() * 6) + 1;
       setTimeout(() => {
         handlePlayerRoll(goodyPlayerSlot, "Goody", rollVal);
@@ -638,6 +1096,7 @@
         stageSelectedOption = chosen;
         stageOptionStatus = 'selected';
         renderStageQuestionBoard();
+        pushAuthoritativeState();
 
         connectedDataConns.forEach(c => {
           if (c.open) {
@@ -868,10 +1327,10 @@
               return;
             }
 
+            const cId = conn.metadata ? conn.metadata.contestant : null;
             const clientName = (conn.metadata && conn.metadata.name) ? conn.metadata.name.trim() : (cId === "goody-contestant-2" ? "Player 2" : "Player 1");
             const clientCity = (conn.metadata && conn.metadata.city) ? conn.metadata.city.trim() : (cId === "goody-contestant-2" ? "Nottingham" : "London");
             const clientToken = conn.metadata ? conn.metadata.sessionToken : null;
-            const cId = conn.metadata ? conn.metadata.contestant : null;
 
             if (cId === "goody-contestant-1") {
               isP1Connected = true;
@@ -1038,6 +1497,9 @@
     }
 
     function speakGoody(text, onComplete) {
+      if (isLocalHost && socket && socket.connected) {
+        socket.emit('host_speak', { text });
+      }
       connectedDataConns.forEach(c => {
         if (c.open) c.send({ type: "HOST_SPEAK", text: text });
       });
@@ -1084,6 +1546,7 @@
 
     function beginTenSecondDiceDuel() {
       gameState = "OPENING_DUEL";
+      updateHudStatusBanner();
       renderStageQuestionBoard();
       p1RollVal = null;
       p2RollVal = null;
@@ -1091,6 +1554,7 @@
       isDiceRollingP2 = true;
       isPawnMoving = false;
       hasPlayerRolledThisTurn = false;
+      pushAuthoritativeState();
 
       broadcastMicState("goody-contestant-1", false);
       broadcastMicState("goody-contestant-2", false);
@@ -1105,1074 +1569,1280 @@
           if (!isSoloMode && p2RollVal === null) p2RollVal = Math.floor(Math.random() * 6) + 1;
           isDiceRollingP1 = false;
           isDiceRollingP2 = false;
-          renderStageQuestionBoard();
+          renderStageQuestionBoard
           renderBackstageScreens();
           setTimeout(finalizeDiceDuel, 1200);
         }
       });
     }
 
-    function handlePlayerRoll(contestant, name, roll) {
-      if (gameState === "OPENING_DUEL") {
-        if (contestant === "goody-contestant-2") {
-          if (p2RollVal !== null) return;
-          p2RollVal = roll; isDiceRollingP2 = false;
-        } else {
-          if (p1RollVal !== null) return;
-          p1RollVal = roll; isDiceRollingP1 = false;
-        }
-        playTone(587, 'sine', 0.15, 0.08);
-        renderStageQuestionBoard();
-        renderBackstageScreens();
-
-        if ((isSoloMode && p1RollVal !== null) || (p1RollVal !== null && p2RollVal !== null)) {
-          stopDiceCountdown();
-          setTimeout(finalizeDiceDuel, 1200);
-        }
-      } else if (gameState === "IN_PLAY") {
-        if (contestant !== activePlayer || hasPlayerRolledThisTurn || isPawnMoving) {
-          if (contestant === "goody-contestant-2") isDiceRollingP2 = false;
-          else isDiceRollingP1 = false;
-          return;
-        }
-        stopDiceCountdown();
-        hasPlayerRolledThisTurn = true;
-        isPawnMoving = true;
-       
-        if (contestant === "goody-contestant-2") {
-          p2RollVal = roll; isDiceRollingP2 = false;
-        } else {
-          p1RollVal = roll; isDiceRollingP1 = false;
-        }
-        playTone(587, 'sine', 0.15, 0.08);
-        renderStageQuestionBoard();
-        renderBackstageScreens();
-
-        setTimeout(() => {
-          const speech = contestant === goodyPlayerSlot
-            ? `I rolled a ${roll}! Moving forwards ${roll} spaces!`
-            : `${name} rolled a ${roll}! Moving ${roll} spaces.`;
-
-          speakGoody(speech, () => {
-            advanceTurnPlayer(contestant, roll);
-          });
-        }, 1200);
-      }
+   function handlePlayerRoll(contestant, name, roll) {
+  if (gameState === "OPENING_DUEL") {
+    if (contestant === "goody-contestant-2") {
+      if (p2RollVal !== null) return;
+      p2RollVal = roll; isDiceRollingP2 = false;
+    } else {
+      if (p1RollVal !== null) return;
+      p1RollVal = roll; isDiceRollingP1 = false;
     }
+    playTone(587, 'sine', 0.15, 0.08);
+    renderStageQuestionBoard();
+    renderBackstageScreens();
+    pushAuthoritativeState();
 
-    function startTwentyMinuteMatchTimer() {
-      if (matchTimerInterval) clearInterval(matchTimerInterval);
-      matchTimerInterval = setInterval(() => {
-        if (gameState !== "IN_PLAY") return;
-        matchTimerSeconds--;
-
-        const mins = Math.max(0, Math.floor(matchTimerSeconds / 60)).toString().padStart(2, '0');
-        const secs = Math.max(0, (matchTimerSeconds % 60)).toString().padStart(2, '0');
-        const timeStr = `${mins}:${secs}`;
-       
-        gameClockValEl.textContent = timeStr;
-        renderWallClockTexture(timeStr);
-
-        connectedDataConns.forEach(c => {
-          if (c.open) c.send({ type: "SYNC_MATCH_TIMER", timeStr: timeStr, secondsLeft: matchTimerSeconds });
-        });
-
-        if (matchTimerSeconds <= 0) {
-          clearInterval(matchTimerInterval);
-          isTimeExpired = true;
-          if (!activeQuestion && !activeRecap && !isTieBreakerActive) {
-            evaluateFinalShowdown();
-          }
-        }
-      }, 1000);
+    if ((isSoloMode && p1RollVal !== null) || (p1RollVal !== null && p2RollVal !== null)) {
+      stopDiceCountdown();
+      setTimeout(finalizeDiceDuel, 1200);
     }
+  } else if (gameState === "IN_PLAY") {
+    if (contestant !== activePlayer || hasPlayerRolledThisTurn || isPawnMoving) {
+      if (contestant === "goody-contestant-2") isDiceRollingP2 = false;
+      else isDiceRollingP1 = false;
+      return;
+    }
+    stopDiceCountdown();
+    hasPlayerRolledThisTurn = true;
+    isPawnMoving = true;
 
-    function finalizeDiceDuel() {
-      if (p1RollVal === null) p1RollVal = Math.floor(Math.random() * 6) + 1;
-      if (!isSoloMode && p2RollVal === null) p2RollVal = Math.floor(Math.random() * 6) + 1;
-      isDiceRollingP1 = false;
-      isDiceRollingP2 = false;
+    if (contestant === "goody-contestant-2") {
+      p2RollVal = roll; isDiceRollingP2 = false;
+    } else {
+      p1RollVal = roll; isDiceRollingP1 = false;
+    }
+    playTone(587, 'sine', 0.15, 0.08);
+    renderStageQuestionBoard();
+    renderBackstageScreens();
+    pushAuthoritativeState();
 
-      if (!isSoloMode && p1RollVal === p2RollVal) {
-        const tieVal = p1RollVal;
-        const speech = `Both contestants rolled a ${tieVal}! It's a dead heat tie! We must re-roll to decide who goes first! You have 10 seconds to roll your dice!`;
-        speakGoody(speech, () => {
-          p1RollVal = null;
-          p2RollVal = null;
-          beginTenSecondDiceDuel();
-        });
-        return;
-      }
+    setTimeout(() => {
+      const speech = contestant === goodyPlayerSlot
+        ? `I rolled a ${roll}! Moving forwards ${roll} spaces!`
+        : `${name} rolled a ${roll}! Moving ${roll} spaces.`;
 
-      const winnerNum = isSoloMode ? 1 : (p1RollVal > p2RollVal ? 1 : 2);
-      activePlayer = winnerNum === 1 ? "goody-contestant-1" : "goody-contestant-2";
-      const finalWinningRoll = winnerNum === 1 ? p1RollVal : p2RollVal;
-
-      gameState = "IN_PLAY";
-      hasPlayerRolledThisTurn = false;
-      isPawnMoving = true;
-      renderStageQuestionBoard();
-      renderBackstageScreens();
-      startTwentyMinuteMatchTimer();
-      broadcastBoardState();
-
-      const pName = contestantNames[activePlayer];
-      speakGoody(`${pName} wins the opening roll with a ${finalWinningRoll}! The 20-minute show clock has begun! Moving ${finalWinningRoll} spaces.`, () => {
-        advanceTurnPlayer(activePlayer, finalWinningRoll);
+      speakGoody(speech, () => {
+        advanceTurnPlayer(contestant, roll);
       });
+    }, 1200);
+  }
+}
+
+function startTwentyMinuteMatchTimer() {
+  if (matchTimerInterval) clearInterval(matchTimerInterval);
+  matchTimerInterval = setInterval(() => {
+    if (!isLocalHost) {
+      clearInterval(matchTimerInterval);
+      return;
+    }
+    if (gameState !== "IN_PLAY") return;
+    matchTimerSeconds--;
+
+    const mins = Math.max(0, Math.floor(matchTimerSeconds / 60)).toString().padStart(2, '0');
+    const secs = Math.max(0, (matchTimerSeconds % 60)).toString().padStart(2, '0');
+    const timeStr = `${mins}:${secs}`;
+
+    gameClockValEl.textContent = timeStr;
+    renderWallClockTexture(timeStr);
+    pushAuthoritativeState();
+
+    connectedDataConns.forEach(c => {
+      if (c.open) c.send({ type: "SYNC_MATCH_TIMER", timeStr: timeStr, secondsLeft: matchTimerSeconds });
+    });
+
+    if (matchTimerSeconds <= 0) {
+      clearInterval(matchTimerInterval);
+      isTimeExpired = true;
+      pushAuthoritativeState();
+      if (!activeQuestion && !activeRecap && !isTieBreakerActive) {
+        evaluateFinalShowdown();
+      }
+    }
+  }, 1000);
+}
+
+function finalizeDiceDuel() {
+  if (p1RollVal === null) p1RollVal = Math.floor(Math.random() * 6) + 1;
+  if (!isSoloMode && p2RollVal === null) p2RollVal = Math.floor(Math.random() * 6) + 1;
+  isDiceRollingP1 = false;
+  isDiceRollingP2 = false;
+
+  if (!isSoloMode && p1RollVal === p2RollVal) {
+    const tieVal = p1RollVal;
+    const speech = `Both contestants rolled a ${tieVal}! It's a dead heat tie! We must re-roll to decide who goes first! You have 10 seconds to roll your dice!`;
+    speakGoody(speech, () => {
+      p1RollVal = null;
+      p2RollVal = null;
+      beginTenSecondDiceDuel();
+    });
+    return;
+  }
+
+  const winnerNum = isSoloMode ? 1 : (p1RollVal > p2RollVal ? 1 : 2);
+  activePlayer = winnerNum === 1 ? "goody-contestant-1" : "goody-contestant-2";
+  const finalWinningRoll = winnerNum === 1 ? p1RollVal : p2RollVal;
+
+  gameState = "IN_PLAY";
+  hasPlayerRolledThisTurn = false;
+  isPawnMoving = true;
+  updateHudStatusBanner();
+  renderStageQuestionBoard();
+  renderBackstageScreens();
+  startTwentyMinuteMatchTimer();
+  broadcastBoardState();
+
+  const pName = contestantNames[activePlayer];
+  speakGoody(`${pName} wins the opening roll with a ${finalWinningRoll}! The 20-minute show clock has begun! Moving ${finalWinningRoll} spaces.`, () => {
+    advanceTurnPlayer(activePlayer, finalWinningRoll);
+  });
+}
+
+function animatePawnHop(pawn, fromIdx, toIdx, offsetX, onComplete, hopDurationMs = 280) {
+  if (fromIdx === toIdx) {
+    if (onComplete) onComplete();
+    return;
+  }
+
+  const stepDirection = toIdx > fromIdx ? 1 : -1;
+  let currentHopIdx = fromIdx;
+
+  function hopNextStep() {
+    if (gameState === "INTERMISSION") {
+      isPawnMoving = false;
+      return;
     }
 
-    function animatePawnHop(pawn, fromIdx, toIdx, offsetX, onComplete, hopDurationMs = 280) {
-      if (fromIdx === toIdx) {
-        if (onComplete) onComplete();
+    if (currentHopIdx === toIdx) {
+      if (onComplete) onComplete();
+      return;
+    }
+
+    const nextHopIdx = currentHopIdx + stepDirection;
+    const startPos = {
+      x: boardTileCoords[currentHopIdx].x + offsetX,
+      y: 0.52,
+      z: boardTileCoords[currentHopIdx].z
+    };
+    const endPos = {
+      x: boardTileCoords[nextHopIdx].x + offsetX,
+      y: 0.52,
+      z: boardTileCoords[nextHopIdx].z
+    };
+
+    const hopStartTime = performance.now();
+    playTone(320 + Math.random() * 80, 'sine', 0.06, 0.04);
+
+    function stepFrame(now) {
+      if (gameState === "INTERMISSION") {
+        isPawnMoving = false;
         return;
       }
 
-      const stepDirection = toIdx > fromIdx ? 1 : -1;
-      let currentHopIdx = fromIdx;
+      const elapsed = now - hopStartTime;
+      const progress = Math.min(1.0, elapsed / hopDurationMs);
 
-      function hopNextStep() {
-        if (gameState === "INTERMISSION") {
-          isPawnMoving = false;
-          return;
-        }
+      const jumpArc = 4.0 * 0.35 * progress * (1.0 - progress);
 
-        if (currentHopIdx === toIdx) {
-          if (onComplete) onComplete();
-          return;
-        }
+      pawn.position.x = startPos.x + (endPos.x - startPos.x) * progress;
+      pawn.position.y = 0.52 + jumpArc;
+      pawn.position.z = startPos.z + (endPos.z - startPos.z) * progress;
 
-        const nextHopIdx = currentHopIdx + stepDirection;
-        const startPos = {
-          x: boardTileCoords[currentHopIdx].x + offsetX,
-          y: 0.52,
-          z: boardTileCoords[currentHopIdx].z
-        };
-        const endPos = {
-          x: boardTileCoords[nextHopIdx].x + offsetX,
-          y: 0.52,
-          z: boardTileCoords[nextHopIdx].z
-        };
-
-        const hopStartTime = performance.now();
-        playTone(320 + Math.random() * 80, 'sine', 0.06, 0.04);
-
-        function stepFrame(now) {
-          if (gameState === "INTERMISSION") {
-            isPawnMoving = false;
-            return;
-          }
-
-          const elapsed = now - hopStartTime;
-          const progress = Math.min(1.0, elapsed / hopDurationMs);
-
-          const jumpArc = 4.0 * 0.35 * progress * (1.0 - progress);
-
-          pawn.position.x = startPos.x + (endPos.x - startPos.x) * progress;
-          pawn.position.y = 0.52 + jumpArc;
-          pawn.position.z = startPos.z + (endPos.z - startPos.z) * progress;
-
-          if (progress < 1.0) {
-            requestAnimationFrame(stepFrame);
-          } else {
-            pawn.position.set(endPos.x, 0.52, endPos.z);
-            playTone(220, 'triangle', 0.05, 0.03);
-            currentHopIdx = nextHopIdx;
-            setTimeout(hopNextStep, 50);
-          }
-        }
-
+      if (progress < 1.0) {
         requestAnimationFrame(stepFrame);
+      } else {
+        pawn.position.set(endPos.x, 0.52, endPos.z);
+        playTone(220, 'triangle', 0.05, 0.03);
+        currentHopIdx = nextHopIdx;
+        setTimeout(hopNextStep, 50);
       }
-
-      hopNextStep();
     }
 
-    function advanceTurnPlayer(playerSlot, roll) {
-      const isP1 = playerSlot === "goody-contestant-1";
-      const oldIdx = isP1 ? p1Index : p2Index;
-      const targetIdx = Math.min(boardTileCoords.length - 1, oldIdx + roll);
-      const targetPawn = isP1 ? pawn1 : pawn2;
-      const xOffset = isP1 ? -0.08 : 0.08;
+    requestAnimationFrame(stepFrame);
+  }
 
-      if (isP1) p1Index = targetIdx;
-      else p2Index = targetIdx;
+  hopNextStep();
+}
 
-      animatePawnHop(targetPawn, oldIdx, targetIdx, xOffset, () => {
-        isPawnMoving = false;
-        broadcastBoardState();
+function advanceTurnPlayer(playerSlot, roll) {
+  const isP1 = playerSlot === "goody-contestant-1";
+  const oldIdx = isP1 ? p1Index : p2Index;
+  const targetIdx = Math.min(boardTileCoords.length - 1, oldIdx + roll);
+  const targetPawn = isP1 ? pawn1 : pawn2;
+  const xOffset = isP1 ? -0.08 : 0.08;
 
-        if (p1Index >= boardTileCoords.length - 1 || p2Index >= boardTileCoords.length - 1) {
-          const winName = isP1 ? contestantNames["goody-contestant-1"] : contestantNames["goody-contestant-2"];
-          const loseName = isP1 ? contestantNames["goody-contestant-2"] : contestantNames["goody-contestant-1"];
-          triggerFinishLineVictory(winName, loseName);
-          return;
-        }
+  if (isP1) p1Index = targetIdx;
+  else p2Index = targetIdx;
 
-        const currentTileIdx = isP1 ? p1Index : p2Index;
-        const landedCountry = boardTileCoords[currentTileIdx].country;
-        const qPool = COUNTRY_QUESTIONS[landedCountry] || COUNTRY_QUESTIONS["UK"];
-        const rawQ = qPool[Math.floor(Math.random() * qPool.length)];
-       
-        activeQuestion = {
-          country: landedCountry,
-          text: rawQ.q,
-          q: rawQ.q,
-          options: rawQ.options,
-          ans: rawQ.ans,
-          recap: rawQ.recap
-        };
-        activeRecap = null;
-        stageSelectedOption = null;
-        stageOptionStatus = null;
+  animatePawnHop(targetPawn, oldIdx, targetIdx, xOffset, () => {
+    isPawnMoving = false;
+    broadcastBoardState();
 
-        stopDiceCountdown();
-        if (questionInterval) clearInterval(questionInterval);
-        isQuestionTimerActive = false;
-        questionTimer = 0;
+    if (p1Index >= boardTileCoords.length - 1 || p2Index >= boardTileCoords.length - 1) {
+      const winName = isP1 ? contestantNames["goody-contestant-1"] : contestantNames["goody-contestant-2"];
+      const loseName = isP1 ? contestantNames["goody-contestant-2"] : contestantNames["goody-contestant-1"];
+      triggerFinishLineVictory(winName, loseName);
+      return;
+    }
 
-        const activeName = contestantNames[activePlayer];
+    const currentTileIdx = isP1 ? p1Index : p2Index;
+    const landedCountry = boardTileCoords[currentTileIdx].country;
+    const qPool = COUNTRY_QUESTIONS[landedCountry] || COUNTRY_QUESTIONS["UK"];
+    const rawQ = qPool[Math.floor(Math.random() * qPool.length)];
 
+    activeQuestion = {
+      country: landedCountry,
+      text: rawQ.q,
+      q: rawQ.q,
+      options: rawQ.options,
+      ans: rawQ.ans,
+      recap: rawQ.recap
+    };
+    activeRecap = null;
+    stageSelectedOption = null;
+    stageOptionStatus = null;
+
+    stopDiceCountdown();
+    if (questionInterval) clearInterval(questionInterval);
+    isQuestionTimerActive = false;
+    questionTimer = 0;
+
+    const activeName = contestantNames[activePlayer];
+
+    connectedDataConns.forEach(c => {
+      if (c.open) c.send({
+        type: "SHOW_QUESTION_LOCKED",
+        question: activeQuestion,
+        activeContestantId: activePlayer,
+        activeContestantName: activeName
+      });
+    });
+    renderStageQuestionBoard();
+    pushAuthoritativeState();
+
+    const speech = activePlayer === goodyPlayerSlot
+      ? `I landed on ${landedCountry}! Here is my question: ${activeQuestion.q}... Let me process this in my circuits!`
+      : `${activeName} landed on ${landedCountry}! Here is your question: ${activeQuestion.q}... You have 30 seconds to lock in!`;
+
+    speakGoody(speech, () => {
+      if (gameState === "INTERMISSION") return;
+
+      if (activePlayer === goodyPlayerSlot) {
+        executeGoodyAnswer();
+      } else {
         connectedDataConns.forEach(c => {
           if (c.open) c.send({
-            type: "SHOW_QUESTION_LOCKED",
-            question: activeQuestion,
+            type: "UNLOCK_QUESTION_INPUT",
             activeContestantId: activePlayer,
             activeContestantName: activeName
           });
         });
-        renderStageQuestionBoard();
+        broadcastMicState(activePlayer, true, "🎙️ Thinking out loud? Your mic is LIVE!");
+        startQuestionCountdown();
+      }
+    });
+  });
+}
 
-        const speech = activePlayer === goodyPlayerSlot
-          ? `I landed on ${landedCountry}! Here is my question: ${activeQuestion.q}... Let me process this in my circuits!`
-          : `${activeName} landed on ${landedCountry}! Here is your question: ${activeQuestion.q}... You have 30 seconds to lock in!`;
+function startQuestionCountdown() {
+  questionTimer = 30;
+  isQuestionTimerActive = true;
+  renderStageQuestionBoard();
+  pushAuthoritativeState();
 
-        speakGoody(speech, () => {
-          if (gameState === "INTERMISSION") return;
-
-          if (activePlayer === goodyPlayerSlot) {
-            executeGoodyAnswer();
-          } else {
-            connectedDataConns.forEach(c => {
-              if (c.open) c.send({
-                type: "UNLOCK_QUESTION_INPUT",
-                activeContestantId: activePlayer,
-                activeContestantName: activeName
-              });
-            });
-            broadcastMicState(activePlayer, true, "🎙️ Thinking out loud? Your mic is LIVE!");
-            startQuestionCountdown();
-          }
-        });
-      });
+  if (questionInterval) clearInterval(questionInterval);
+  questionInterval = setInterval(() => {
+    if (!isLocalHost) {
+      clearInterval(questionInterval);
+      return;
     }
-
-    function startQuestionCountdown() {
-      questionTimer = 30;
-      isQuestionTimerActive = true;
-      renderStageQuestionBoard();
-
-      if (questionInterval) clearInterval(questionInterval);
-      questionInterval = setInterval(() => {
-        if (gameState === "INTERMISSION") {
-          clearInterval(questionInterval);
-          isQuestionTimerActive = false;
-          return;
-        }
-        questionTimer--;
-        renderStageQuestionBoard();
-        if (questionTimer <= 0) {
-          clearInterval(questionInterval);
-          isQuestionTimerActive = false;
-          broadcastMicState(activePlayer, false);
-          handleQuestionTimeout(activePlayer);
-        }
-      }, 1000);
-    }
-
-    function evaluateAnswer(contestant, chosen) {
-      stopDiceCountdown();
-      if (questionInterval) clearInterval(questionInterval);
+    if (gameState === "INTERMISSION") {
+      clearInterval(questionInterval);
       isQuestionTimerActive = false;
-      questionTimer = 0;
-      broadcastMicState(contestant, false);
-      const isCorrect = chosen === activeQuestion.ans;
-
-      if (contestant !== goodyPlayerSlot) {
-        playerStats.asked++;
-        if (isCorrect) playerStats.correct++;
-      }
-
-      stageOptionStatus = isCorrect ? 'correct' : 'wrong';
-      renderStageQuestionBoard();
-
-      connectedDataConns.forEach(c => {
-        if (c.open) c.send({
-          type: "EVALUATION_RESULT",
-          forContestant: contestant,
-          chosenAnswer: chosen,
-          isCorrect: isCorrect,
-          recap: activeQuestion.recap,
-          country: activeQuestion.country
-        });
-      });
-
-      activeRecap = { country: activeQuestion.country, text: activeQuestion.recap, isCorrect };
-      activeQuestion = null;
-      renderStageQuestionBoard();
-
-      const isGoody = contestant === goodyPlayerSlot;
-      if (isCorrect) {
-        const speech = isGoody
-          ? `My circuits calculated correctly! That is correct! Here is what we learned: ${activeRecap.text}`
-          : `Well done, that's correct! Here is what we learned: ${activeRecap.text}`;
-
-        speakGoody(speech, () => {
-          transitionToRulesAndNextTurn();
-        });
-      } else {
-        const speech = isGoody
-          ? `Oh no! A system malfunction in my memory bank! I got it wrong! I must go back to the start! Here is what we learned: ${activeRecap.text}`
-          : `Unlucky, that's incorrect. You must go back to the start! Here is what we learned: ${activeRecap.text}`;
-
-        speakGoody(speech, () => {
-          resetPlayerToStart(contestant, () => {
-            transitionToRulesAndNextTurn();
-          });
-        });
-      }
+      return;
     }
-
-    function handleQuestionTimeout(contestant) {
-      stopDiceCountdown();
-      if (questionInterval) clearInterval(questionInterval);
+    questionTimer--;
+    renderStageQuestionBoard();
+    pushAuthoritativeState();
+    if (questionTimer <= 0) {
+      clearInterval(questionInterval);
       isQuestionTimerActive = false;
-      questionTimer = 0;
-      broadcastMicState(contestant, false);
-
-      if (contestant !== goodyPlayerSlot) {
-        playerStats.asked++;
-      }
-
-      stageOptionStatus = 'wrong';
-      renderStageQuestionBoard();
-
-      connectedDataConns.forEach(c => {
-        if (c.open) c.send({
-          type: "EVALUATION_RESULT",
-          forContestant: contestant,
-          chosenAnswer: null,
-          isCorrect: false,
-          recap: activeQuestion.recap,
-          country: activeQuestion.country
-        });
-      });
-
-      activeRecap = { country: activeQuestion.country, text: activeQuestion.recap, isCorrect: false };
-      activeQuestion = null;
-      renderStageQuestionBoard();
-
-      speakGoody(`I'm sorry, you ran out of time! You must go back to the start! Here is what we learned: ${activeRecap.text}`, () => {
-        resetPlayerToStart(contestant, () => {
-          transitionToRulesAndNextTurn();
-        });
-      });
+      broadcastMicState(activePlayer, false);
+      handleQuestionTimeout(activePlayer);
     }
+  }, 1000);
+}
 
-    function transitionToRulesAndNextTurn() {
-      stopDiceCountdown();
-      activeRecap = null;
-      activeQuestion = null;
-      isQuestionTimerActive = false;
-      questionTimer = 0;
-      renderStageQuestionBoard();
+function evaluateAnswer(contestant, chosen) {
+  stopDiceCountdown();
+  if (questionInterval) clearInterval(questionInterval);
+  isQuestionTimerActive = false;
+  questionTimer = 0;
+  broadcastMicState(contestant, false);
+  const isCorrect = chosen === activeQuestion.ans;
 
-      if (isTimeExpired) {
-        setTimeout(() => evaluateFinalShowdown(), 2000);
-        return;
+  if (contestant !== goodyPlayerSlot) {
+    playerStats.asked++;
+    if (isCorrect) playerStats.correct++;
+  }
+
+  stageOptionStatus = isCorrect ? 'correct' : 'wrong';
+  renderStageQuestionBoard();
+
+  connectedDataConns.forEach(c => {
+    if (c.open) c.send({
+      type: "EVALUATION_RESULT",
+      forContestant: contestant,
+      chosenAnswer: chosen,
+      isCorrect: isCorrect,
+      recap: activeQuestion.recap,
+      country: activeQuestion.country
+    });
+  });
+
+  activeRecap = { country: activeQuestion.country, text: activeQuestion.recap, isCorrect };
+  activeQuestion = null;
+  renderStageQuestionBoard();
+  pushAuthoritativeState();
+
+  const isGoody = contestant === goodyPlayerSlot;
+  if (isCorrect) {
+    const speech = isGoody
+      ? `My circuits calculated correctly! That is correct! Here is what we learned: ${activeRecap.text}`
+      : `Well done, that's correct! Here is what we learned: ${activeRecap.text}`;
+
+    speakGoody(speech, () => {
+      transitionToRulesAndNextTurn();
+    });
+  } else {
+    const speech = isGoody
+      ? `Oh no! A system malfunction in my memory bank! I got it wrong! I must go back to the start! Here is what we learned: ${activeRecap.text}`
+      : `Unlucky, that's incorrect. You must go back to the start! Here is what we learned: ${activeRecap.text}`;
+
+    speakGoody(speech, () => {
+      resetPlayerToStart(contestant, () => {
+        transitionToRulesAndNextTurn();
+      });
+    });
+  }
+}
+
+function handleQuestionTimeout(contestant) {
+  stopDiceCountdown();
+  if (questionInterval) clearInterval(questionInterval);
+  isQuestionTimerActive = false;
+  questionTimer = 0;
+  broadcastMicState(contestant, false);
+
+  if (contestant !== goodyPlayerSlot) {
+    playerStats.asked++;
+  }
+
+  stageOptionStatus = 'wrong';
+  renderStageQuestionBoard();
+
+  connectedDataConns.forEach(c => {
+    if (c.open) c.send({
+      type: "EVALUATION_RESULT",
+      forContestant: contestant,
+      chosenAnswer: null,
+      isCorrect: false,
+      recap: activeQuestion.recap,
+      country: activeQuestion.country
+    });
+  });
+
+  activeRecap = { country: activeQuestion.country, text: activeQuestion.recap, isCorrect: false };
+  activeQuestion = null;
+  renderStageQuestionBoard();
+  pushAuthoritativeState();
+
+  speakGoody(`I'm sorry, you ran out of time! You must go back to the start! Here is what we learned: ${activeRecap.text}`, () => {
+    resetPlayerToStart(contestant, () => {
+      transitionToRulesAndNextTurn();
+    });
+  });
+}
+
+function transitionToRulesAndNextTurn() {
+  stopDiceCountdown();
+  activeRecap = null;
+  activeQuestion = null;
+  isQuestionTimerActive = false;
+  questionTimer = 0;
+  renderStageQuestionBoard();
+  pushAuthoritativeState();
+
+  if (isTimeExpired) {
+    setTimeout(() => evaluateFinalShowdown(), 2000);
+    return;
+  }
+
+  setTimeout(() => {
+    nextTurn();
+  }, 1000);
+}
+
+function resetPlayerToStart(contestant, onComplete) {
+  const isP1 = contestant === "goody-contestant-1";
+  const startFromIdx = isP1 ? p1Index : p2Index;
+  const pawnToMove = isP1 ? pawn1 : pawn2;
+  const xOffset = isP1 ? -0.08 : 0.08;
+
+  if (isP1) p1Index = 0;
+  else p2Index = 0;
+
+  animatePawnHop(pawnToMove, startFromIdx, 0, xOffset, () => {
+    broadcastBoardState();
+    if (onComplete) onComplete();
+  }, 110);
+}
+
+function nextTurn() {
+  if (gameState !== "IN_PLAY" || !isLocalHost) return;
+
+  stopDiceCountdown();
+
+  if (isSoloMode) {
+    activePlayer = soloPlayerId;
+  } else {
+    activePlayer = activePlayer === "goody-contestant-1" ? "goody-contestant-2" : "goody-contestant-1";
+  }
+
+  const pName = contestantNames[activePlayer];
+
+  activeQuestion = null;
+  activeRecap = null;
+  stageSelectedOption = null;
+  stageOptionStatus = null;
+  p1RollVal = null;
+  p2RollVal = null;
+  hasPlayerRolledThisTurn = false;
+  isPawnMoving = false;
+  isDiceRollingP1 = false;
+  isDiceRollingP2 = false;
+
+  if (questionInterval) clearInterval(questionInterval);
+  isQuestionTimerActive = false;
+  questionTimer = 0;
+  renderStageQuestionBoard();
+  renderBackstageScreens();
+  pushAuthoritativeState();
+
+  if (activePlayer === goodyPlayerSlot) {
+    speakGoody(`It is my turn! Goody is rolling the dice!`, () => {
+      setTimeout(executeGoodyTurnRoll, 1000);
+    });
+  } else {
+    speakGoody(`It is now ${pName}'s turn! You have 10 seconds to roll your dice!`, () => {
+      if (gameState === "IN_PLAY" && activePlayer === (isSoloMode ? soloPlayerId : activePlayer) && !hasPlayerRolledThisTurn && !isPawnMoving) {
+        startTurnDicePrompt(activePlayer, pName);
       }
+    });
+  }
+}
 
+function evaluateFinalShowdown() {
+  stopDiceCountdown();
+  if (questionInterval) clearInterval(questionInterval);
+  isQuestionTimerActive = false;
+  questionTimer = 0;
+  broadcastMicState("goody-contestant-1", false);
+  broadcastMicState("goody-contestant-2", false);
+
+  if (isSoloMode) {
+    gameState = "GAME_OVER";
+    updateHudStatusBanner();
+    pushAuthoritativeState();
+    const soloName = contestantNames[soloPlayerId];
+    const speech = `The 20-minute timer has expired! Unfortunately, ${soloName} was unable to complete the board in time! Tonight's prize rolls over. Goodnight everyone!`;
+    speakGoody(speech);
+    broadcastGameOver("NOBODY", "SOLO_TIME_EXPIRED");
+    return;
+  }
+
+  if (p1Index === 0 && p2Index === 0) {
+    gameState = "GAME_OVER";
+    updateHudStatusBanner();
+    pushAuthoritativeState();
+    const speech = "The 20-minute show timer has run out, and both contestants are still on the starting square! Nobody wins tonight. Goodnight everyone!";
+    speakGoody(speech);
+    broadcastGameOver("NOBODY", "ROLLOVER_START_SQUARE");
+    return;
+  }
+
+  if (p1Index === p2Index) {
+    triggerTieBreakerDuel();
+    return;
+  }
+
+  gameState = "GAME_OVER";
+  updateHudStatusBanner();
+  pushAuthoritativeState();
+  const winner = p1Index > p2Index ? contestantNames["goody-contestant-1"] : contestantNames["goody-contestant-2"];
+  const loser = p1Index > p2Index ? contestantNames["goody-contestant-2"] : contestantNames["goody-contestant-1"];
+
+  const speech = `The 20-minute timer is over! Well done to our winner ${winner}, and commiserations to ${loser}! Goodnight!`;
+  speakGoody(speech);
+  broadcastGameOver(winner, "TIME_EXPIRED_LEADER");
+}
+
+function triggerTieBreakerDuel() {
+  isTieBreakerActive = true;
+  tieBreakerAnswered = false;
+
+  const tiePool = COUNTRY_QUESTIONS["UK"];
+  const rawQ = tiePool[Math.floor(Math.random() * tiePool.length)];
+  activeQuestion = {
+    country: "TIE-BREAKER",
+    text: rawQ.q,
+    q: rawQ.q,
+    options: rawQ.options,
+    ans: rawQ.ans,
+    recap: rawQ.recap
+  };
+
+  stageSelectedOption = null;
+  stageOptionStatus = null;
+  renderStageQuestionBoard();
+  pushAuthoritativeState();
+
+  speakGoody("We have a dead heat draw! Both contestants finished on the exact same tile! We are going to a sudden death tie-breaker question!", () => {
+    connectedDataConns.forEach(c => {
+      if (c.open) c.send({
+        type: "START_TIE_BREAKER",
+        question: activeQuestion
+      });
+    });
+
+    if (isVsGoodyMode) {
       setTimeout(() => {
-        nextTurn();
-      }, 1000);
-    }
-
-    function resetPlayerToStart(contestant, onComplete) {
-      const isP1 = contestant === "goody-contestant-1";
-      const startFromIdx = isP1 ? p1Index : p2Index;
-      const pawnToMove = isP1 ? pawn1 : pawn2;
-      const xOffset = isP1 ? -0.08 : 0.08;
-
-      if (isP1) p1Index = 0;
-      else p2Index = 0;
-
-      animatePawnHop(pawnToMove, startFromIdx, 0, xOffset, () => {
-        broadcastBoardState();
-        if (onComplete) onComplete();
-      }, 110);
-    }
-
-    function nextTurn() {
-      if (gameState !== "IN_PLAY") return;
-
-      stopDiceCountdown();
-
-      if (isSoloMode) {
-        activePlayer = soloPlayerId;
-      } else {
-        activePlayer = activePlayer === "goody-contestant-1" ? "goody-contestant-2" : "goody-contestant-1";
-      }
-
-      const pName = contestantNames[activePlayer];
-
-      activeQuestion = null;
-      activeRecap = null;
-      stageSelectedOption = null;
-      stageOptionStatus = null;
-      p1RollVal = null;
-      p2RollVal = null;
-      hasPlayerRolledThisTurn = false;
-      isPawnMoving = false;
-      isDiceRollingP1 = false;
-      isDiceRollingP2 = false;
-
-      if (questionInterval) clearInterval(questionInterval);
-      isQuestionTimerActive = false;
-      questionTimer = 0;
-      renderStageQuestionBoard();
-      renderBackstageScreens();
-
-      if (activePlayer === goodyPlayerSlot) {
-        speakGoody(`It is my turn! Goody is rolling the dice!`, () => {
-          setTimeout(executeGoodyTurnRoll, 1000);
-        });
-      } else {
-        speakGoody(`It is now ${pName}'s turn! You have 10 seconds to roll your dice!`, () => {
-          if (gameState === "IN_PLAY" && activePlayer === (isSoloMode ? soloPlayerId : activePlayer) && !hasPlayerRolledThisTurn && !isPawnMoving) {
-            startTurnDicePrompt(activePlayer, pName);
-          }
-        });
-      }
-    }
-
-    function evaluateFinalShowdown() {
-      stopDiceCountdown();
-      if (questionInterval) clearInterval(questionInterval);
-      isQuestionTimerActive = false;
-      questionTimer = 0;
-      broadcastMicState("goody-contestant-1", false);
-      broadcastMicState("goody-contestant-2", false);
-
-      if (isSoloMode) {
-        gameState = "GAME_OVER";
-        const soloName = contestantNames[soloPlayerId];
-        const speech = `The 20-minute timer has expired! Unfortunately, ${soloName} was unable to complete the board in time! Tonight's prize rolls over. Goodnight everyone!`;
-        speakGoody(speech);
-        broadcastGameOver("NOBODY", "SOLO_TIME_EXPIRED");
-        return;
-      }
-
-      if (p1Index === 0 && p2Index === 0) {
-        gameState = "GAME_OVER";
-        const speech = "The 20-minute show timer has run out, and both contestants are still on the starting square! Nobody wins tonight. Goodnight everyone!";
-        speakGoody(speech);
-        broadcastGameOver("NOBODY", "ROLLOVER_START_SQUARE");
-        return;
-      }
-
-      if (p1Index === p2Index) {
-        triggerTieBreakerDuel();
-        return;
-      }
-
-      gameState = "GAME_OVER";
-      const winner = p1Index > p2Index ? contestantNames["goody-contestant-1"] : contestantNames["goody-contestant-2"];
-      const loser = p1Index > p2Index ? contestantNames["goody-contestant-2"] : contestantNames["goody-contestant-1"];
-
-      const speech = `The 20-minute timer is over! Well done to our winner ${winner}, and commiserations to ${loser}! Goodnight!`;
-      speakGoody(speech);
-      broadcastGameOver(winner, "TIME_EXPIRED_LEADER");
-    }
-
-    function triggerTieBreakerDuel() {
-      isTieBreakerActive = true;
-      tieBreakerAnswered = false;
-
-      const tiePool = COUNTRY_QUESTIONS["UK"];
-      const rawQ = tiePool[Math.floor(Math.random() * tiePool.length)];
-      activeQuestion = {
-        country: "TIE-BREAKER",
-        text: rawQ.q,
-        q: rawQ.q,
-        options: rawQ.options,
-        ans: rawQ.ans,
-        recap: rawQ.recap
-      };
-
-      stageSelectedOption = null;
-      stageOptionStatus = null;
-      renderStageQuestionBoard();
-
-      speakGoody("We have a dead heat draw! Both contestants finished on the exact same tile! We are going to a sudden death tie-breaker question!", () => {
-        connectedDataConns.forEach(c => {
-          if (c.open) c.send({
-            type: "START_TIE_BREAKER",
-            question: activeQuestion
-          });
-        });
-
-        if (isVsGoodyMode) {
-          setTimeout(() => {
-            if (!tieBreakerAnswered) {
-              handleTieBreakerAnswer(goodyPlayerSlot, activeQuestion.ans);
-            }
-          }, 8000 + Math.random() * 4000);
+        if (!tieBreakerAnswered) {
+          handleTieBreakerAnswer(goodyPlayerSlot, activeQuestion.ans);
         }
+      }, 8000 + Math.random() * 4000);
+    }
+  });
+}
+
+function handleTieBreakerAnswer(contestant, chosen) {
+  if (tieBreakerAnswered) return;
+  tieBreakerAnswered = true;
+  isTieBreakerActive = false;
+
+  const isP1 = contestant === "goody-contestant-1";
+  const answeringName = isP1 ? contestantNames["goody-contestant-1"] : contestantNames["goody-contestant-2"];
+  const opponentName = isP1 ? contestantNames["goody-contestant-2"] : contestantNames["goody-contestant-1"];
+  const isCorrect = chosen === activeQuestion.ans;
+
+  stageSelectedOption = chosen;
+  stageOptionStatus = isCorrect ? 'correct' : 'wrong';
+  renderStageQuestionBoard();
+
+  gameState = "GAME_OVER";
+  updateHudStatusBanner();
+  pushAuthoritativeState();
+  const winner = isCorrect ? answeringName : opponentName;
+  const loser = isCorrect ? opponentName : answeringName;
+
+  connectedDataConns.forEach(c => {
+    if (c.open) c.send({
+      type: "TIE_BREAKER_RESULT",
+      winner: winner,
+      loser: loser,
+      isCorrect: isCorrect,
+      chosenAnswer: chosen,
+      ans: activeQuestion.ans
+    });
+  });
+
+  const speech = isCorrect
+    ? `That is correct! Well done to our winner ${winner}! Goodnight!`
+    : `That is incorrect! By default, well done to our winner ${winner}! Goodnight!`;
+
+  speakGoody(speech);
+  broadcastGameOver(winner, "TIE_BREAKER_DECISION");
+}
+
+function triggerFinishLineVictory(winnerName, loserName) {
+  gameState = "GAME_OVER";
+  updateHudStatusBanner();
+  pushAuthoritativeState();
+  if (matchTimerInterval) clearInterval(matchTimerInterval);
+  if (questionInterval) clearInterval(questionInterval);
+  stopDiceCountdown();
+  isQuestionTimerActive = false;
+  questionTimer = 0;
+  broadcastMicState("goody-contestant-1", false);
+  broadcastMicState("goody-contestant-2", false);
+
+  const speech = isSoloMode
+    ? `Unbelievable! ${winnerName} has reached the final square and completed the solo challenge! Well done! Goodnight!`
+    : `Unbelievable! ${winnerName} has reached the final square! Well done to our winner ${winnerName}, and commiserations to ${loserName}! Goodnight!`;
+
+  speakGoody(speech);
+  broadcastGameOver(winnerName, "REACHED_THE_END");
+}
+
+function broadcastGameOver(winnerName, reason) {
+  connectedDataConns.forEach(c => {
+    if (c.open) c.send({ type: "GAME_OVER", winner: winnerName, reason: reason });
+  });
+}
+
+const ambientLight = new THREE.AmbientLight(0x181026, 0.85); scene.add(ambientLight);
+const ceilingLight = new THREE.PointLight(0xffecd2, 1.0, 50); ceilingLight.position.set(0, 13.5, 0); scene.add(ceilingLight);
+const deskLampLight = new THREE.PointLight(0xffea9f, 0, 20); deskLampLight.position.set(-6.5, 7.8, -4.5); scene.add(deskLampLight);
+
+const hostSpotlight = new THREE.SpotLight(0xffffff, 0, 16, Math.PI / 4.5, 0.25, 1.2);
+hostSpotlight.position.set(0, 10.5, -11.6);
+const hostSpotTarget = new THREE.Object3D();
+hostSpotTarget.position.set(0, 4.5, -11.6);
+scene.add(hostSpotTarget);
+hostSpotlight.target = hostSpotTarget;
+scene.add(hostSpotlight);
+
+const trussGroup = new THREE.Group();
+trussGroup.position.set(0, 8.4, -9.8);
+const trussMat = new THREE.MeshStandardMaterial({ color: 0x3d3d4e, metalness: 0.85, roughness: 0.3 });
+const trussArch = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.08, 8, 24, Math.PI), trussMat);
+trussArch.rotation.x = Math.PI / 2;
+trussGroup.add(trussArch);
+
+function createDownFacingSpotlight(colorHex, x, y, z) {
+  const fixGroup = new THREE.Group(); fixGroup.position.set(x, y, z);
+  const headPivot = new THREE.Group();
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.55, 16), new THREE.MeshStandardMaterial({ color: 0x15151e }));
+  can.rotation.x = Math.PI / 2; headPivot.add(can);
+  const lens = new THREE.Mesh(new THREE.CircleGeometry(0.19, 16), new THREE.MeshBasicMaterial({ color: 0x050505 }));
+  lens.position.set(0, 0, 0.28); headPivot.add(lens);
+  const spot = new THREE.SpotLight(colorHex, 0, 18, Math.PI / 3.4, 0.35);
+  spot.position.set(0, 0, 0.28); headPivot.add(spot);
+  const targetObj = new THREE.Object3D(); targetObj.position.set(x * 0.4, -4.5, -0.8);
+  scene.add(targetObj); spot.target = targetObj;
+  headPivot.rotation.x = Math.PI * 0.35;
+  fixGroup.add(headPivot); trussGroup.add(fixGroup);
+  return { spot, lens, color: colorHex, target: targetObj };
+}
+const fixtureCyan = createDownFacingSpotlight(0x00f0ff, -2.4, 0.0, 0.2);
+const fixtureGold = createDownFacingSpotlight(0xffea00, 0.0, 0.2, -0.1);
+const fixtureMagenta = createDownFacingSpotlight(0xff007f, 2.4, 0.0, 0.2);
+scene.add(trussGroup);
+
+function updateStudioLighting(power) {
+  const val = power ? 5.0 : 0;
+  deskLampLight.intensity = power ? 2.5 : 0;
+  hostSpotlight.intensity = power ? 9.0 : 0;
+  fixtureCyan.spot.intensity = val;
+  fixtureGold.spot.intensity = val;
+  fixtureMagenta.spot.intensity = val;
+  fixtureCyan.lens.material.color.setHex(power ? fixtureCyan.color : 0x050505);
+  fixtureGold.lens.material.color.setHex(power ? fixtureGold.color : 0x050505);
+  fixtureMagenta.lens.material.color.setHex(power ? fixtureMagenta.color : 0x050505);
+}
+
+const miniDiorama = new THREE.Group(); miniDiorama.position.set(0, 3.95, -9);
+const feltCarpet = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48), new THREE.MeshStandardMaterial({ color: 0x271147 }));
+feltCarpet.position.y = 0.44;
+miniDiorama.add(feltCarpet);
+
+const miniWall = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI / 2, Math.PI), new THREE.MeshStandardMaterial({ color: 0x15092a, side: THREE.BackSide }));
+miniWall.position.y = 2.65; miniDiorama.add(miniWall);
+
+const p1PodiumGroup = new THREE.Group();
+const p1PodiumBase = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.40, 0.48, 0.55, 20),
+  new THREE.MeshStandardMaterial({ color: 0x1b0c30, metalness: 0.5, roughness: 0.3 })
+);
+p1PodiumBase.position.y = 0.275;
+p1PodiumGroup.add(p1PodiumBase);
+
+const p1PodiumRim = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.42, 0.42, 0.04, 20),
+  new THREE.MeshStandardMaterial({ color: 0x00d2d3, metalness: 0.9, roughness: 0.2 })
+);
+p1PodiumRim.position.y = 0.56;
+p1PodiumGroup.add(p1PodiumRim);
+p1PodiumGroup.position.set(-1.6, 0.44, -2.2);
+miniDiorama.add(p1PodiumGroup);
+window.p1PodiumGroup = p1PodiumGroup;
+
+const p2PodiumGroup = new THREE.Group();
+const p2PodiumBase = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.40, 0.48, 0.55, 20),
+  new THREE.MeshStandardMaterial({ color: 0x1b0c30, metalness: 0.5, roughness: 0.3 })
+);
+p2PodiumBase.position.y = 0.275;
+p2PodiumGroup.add(p2PodiumBase);
+
+const p2PodiumRim = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.42, 0.42, 0.04, 20),
+  new THREE.MeshStandardMaterial({ color: 0xff3838, metalness: 0.9, roughness: 0.2 })
+);
+p2PodiumRim.position.y = 0.56;
+p2PodiumGroup.add(p2PodiumRim);
+p2PodiumGroup.position.set(1.6, 0.44, -2.2);
+miniDiorama.add(p2PodiumGroup);
+window.p2PodiumGroup = p2PodiumGroup;
+
+const wallClockCanvas = document.createElement('canvas');
+wallClockCanvas.width = 256; wallClockCanvas.height = 128;
+const wallClockCtx = wallClockCanvas.getContext('2d');
+const wallClockTex = new THREE.CanvasTexture(wallClockCanvas);
+
+function renderWallClockTexture(str) {
+  wallClockCtx.fillStyle = '#06020f';
+  wallClockCtx.fillRect(0, 0, 256, 128);
+  wallClockCtx.strokeStyle = '#00f0ff';
+  wallClockCtx.lineWidth = 4;
+  wallClockCtx.strokeRect(4, 4, 248, 120);
+
+  wallClockCtx.fillStyle = '#ffda66';
+  wallClockCtx.font = 'bold 18px monospace';
+  wallClockCtx.textAlign = 'center';
+  wallClockCtx.fillText("20-MIN SHOW CLOCK", 128, 36);
+
+  wallClockCtx.fillStyle = '#ff7675';
+  wallClockCtx.font = 'bold 50px monospace';
+  wallClockCtx.fillText(str, 128, 95);
+  wallClockTex.needsUpdate = true;
+}
+renderWallClockTexture("20:00");
+
+const wallClockMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(2.4, 1.2),
+  new THREE.MeshBasicMaterial({ map: wallClockTex })
+);
+wallClockMesh.position.set(0, 6.2, -4.4);
+miniDiorama.add(wallClockMesh);
+
+const COUNTRIES = [
+  "France", "Netherlands", "Canada", "Sweden", "Italy", "Denmark",
+  "Brazil", "Australia", "Spain", "Germany", "UK", "Nigeria",
+  "United States", "Belgium"
+];
+
+function createCountryFlagTexture(countryName) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const ctx = c.getContext('2d'); const w = 256; const h = 256;
+  ctx.fillStyle = '#1e1035'; ctx.fillRect(0, 0, w, h);
+  ctx.save(); ctx.beginPath(); ctx.arc(128, 128, 124, 0, Math.PI * 2); ctx.clip();
+
+  switch(countryName) {
+    case "France":
+      ctx.fillStyle = '#002654'; ctx.fillRect(0, 0, w / 3, h);
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(w / 3, 0, w / 3, h);
+      ctx.fillStyle = '#ED2939'; ctx.fillRect((w / 3) * 2, 0, w / 3, h);
+      break;
+    case "Netherlands":
+      ctx.fillStyle = '#AE1C28'; ctx.fillRect(0, 0, w, h / 3);
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, h / 3, w, h / 3);
+      ctx.fillStyle = '#21468B'; ctx.fillRect(0, (h / 3) * 2, w, h / 3);
+      break;
+    case "Canada":
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#FF0000'; ctx.fillRect(0, 0, w * 0.28, h); ctx.fillRect(w * 0.72, 0, w * 0.28, h);
+      ctx.beginPath(); ctx.arc(128, 128, 36, 0, Math.PI * 2); ctx.fill();
+      break;
+    case "Brazil":
+      ctx.fillStyle = '#009739'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#FEDD00';
+      ctx.beginPath(); ctx.moveTo(128, 24); ctx.lineTo(236, 128); ctx.lineTo(128, 232); ctx.lineTo(20, 128); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#012169'; ctx.beginPath(); ctx.arc(128, 128, 52, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(128, 134, 46, 3.4, 6.0); ctx.stroke();
+      break;
+    case "Sweden":
+      ctx.fillStyle = '#006AA7'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#FECC00';
+      ctx.fillRect(75, 0, 36, h); ctx.fillRect(0, 110, w, 36);
+      break;
+    case "Italy":
+      ctx.fillStyle = '#009246'; ctx.fillRect(0, 0, w / 3, h);
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(w / 3, 0, w / 3, h);
+      ctx.fillStyle = '#CE2B37'; ctx.fillRect((w / 3) * 2, 0, w / 3, h);
+      break;
+    case "Denmark":
+      ctx.fillStyle = '#C60C30'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(80, 0, 34, h); ctx.fillRect(0, 111, w, 34);
+      break;
+    case "Australia":
+      ctx.fillStyle = '#00008B'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, 120, 120);
+      ctx.fillStyle = '#CC0000'; ctx.fillRect(48, 0, 24, 120); ctx.fillRect(0, 48, 120, 24);
+      ctx.fillStyle = '#FFFFFF';
+      [[60, 180], [180, 70], [210, 120], [180, 190], [150, 130]].forEach(([sx, sy]) => {
+        ctx.beginPath(); ctx.arc(sx, sy, 10, 0, Math.PI * 2); ctx.fill();
       });
-    }
-
-    function handleTieBreakerAnswer(contestant, chosen) {
-      if (tieBreakerAnswered) return;
-      tieBreakerAnswered = true;
-      isTieBreakerActive = false;
-
-      const isP1 = contestant === "goody-contestant-1";
-      const answeringName = isP1 ? contestantNames["goody-contestant-1"] : contestantNames["goody-contestant-2"];
-      const opponentName = isP1 ? contestantNames["goody-contestant-2"] : contestantNames["goody-contestant-1"];
-      const isCorrect = chosen === activeQuestion.ans;
-
-      stageSelectedOption = chosen;
-      stageOptionStatus = isCorrect ? 'correct' : 'wrong';
-      renderStageQuestionBoard();
-
-      gameState = "GAME_OVER";
-      const winner = isCorrect ? answeringName : opponentName;
-      const loser = isCorrect ? opponentName : answeringName;
-
-      connectedDataConns.forEach(c => {
-        if (c.open) c.send({
-          type: "TIE_BREAKER_RESULT",
-          winner: winner,
-          loser: loser,
-          isCorrect: isCorrect,
-          chosenAnswer: chosen,
-          ans: activeQuestion.ans
-        });
-      });
-
-      const speech = isCorrect
-        ? `That is correct! Well done to our winner ${winner}! Goodnight!`
-        : `That is incorrect! By default, well done to our winner ${winner}! Goodnight!`;
-
-      speakGoody(speech);
-      broadcastGameOver(winner, "TIE_BREAKER_DECISION");
-    }
-
-    function triggerFinishLineVictory(winnerName, loserName) {
-      gameState = "GAME_OVER";
-      if (matchTimerInterval) clearInterval(matchTimerInterval);
-      if (questionInterval) clearInterval(questionInterval);
-      stopDiceCountdown();
-      isQuestionTimerActive = false;
-      questionTimer = 0;
-      broadcastMicState("goody-contestant-1", false);
-      broadcastMicState("goody-contestant-2", false);
-
-      const speech = isSoloMode
-        ? `Unbelievable! ${winnerName} has reached the final square and completed the solo challenge! Well done! Goodnight!`
-        : `Unbelievable! ${winnerName} has reached the final square! Well done to our winner ${winnerName}, and commiserations to ${loserName}! Goodnight!`;
-
-      speakGoody(speech);
-      broadcastGameOver(winnerName, "REACHED_THE_END");
-    }
-
-    function broadcastGameOver(winnerName, reason) {
-      connectedDataConns.forEach(c => {
-        if (c.open) c.send({ type: "GAME_OVER", winner: winnerName, reason: reason });
-      });
-    }
-
-    const ambientLight = new THREE.AmbientLight(0x181026, 0.85); scene.add(ambientLight);
-    const ceilingLight = new THREE.PointLight(0xffecd2, 1.0, 50); ceilingLight.position.set(0, 13.5, 0); scene.add(ceilingLight);
-    const deskLampLight = new THREE.PointLight(0xffea9f, 0, 20); deskLampLight.position.set(-6.5, 7.8, -4.5); scene.add(deskLampLight);
-
-    const hostSpotlight = new THREE.SpotLight(0xffffff, 0, 16, Math.PI / 4.5, 0.25, 1.2);
-    hostSpotlight.position.set(0, 10.5, -11.6);
-    const hostSpotTarget = new THREE.Object3D();
-    hostSpotTarget.position.set(0, 4.5, -11.6);
-    scene.add(hostSpotTarget);
-    hostSpotlight.target = hostSpotTarget;
-    scene.add(hostSpotlight);
-
-    const trussGroup = new THREE.Group();
-    trussGroup.position.set(0, 8.4, -9.8);
-    const trussMat = new THREE.MeshStandardMaterial({ color: 0x3d3d4e, metalness: 0.85, roughness: 0.3 });
-    const trussArch = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.08, 8, 24, Math.PI), trussMat);
-    trussArch.rotation.x = Math.PI / 2;
-    trussGroup.add(trussArch);
-
-    function createDownFacingSpotlight(colorHex, x, y, z) {
-      const fixGroup = new THREE.Group(); fixGroup.position.set(x, y, z);
-      const headPivot = new THREE.Group();
-      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.55, 16), new THREE.MeshStandardMaterial({ color: 0x15151e }));
-      can.rotation.x = Math.PI / 2; headPivot.add(can);
-      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.19, 16), new THREE.MeshBasicMaterial({ color: 0x050505 }));
-      lens.position.set(0, 0, 0.28); headPivot.add(lens);
-      const spot = new THREE.SpotLight(colorHex, 0, 18, Math.PI / 3.4, 0.35);
-      spot.position.set(0, 0, 0.28); headPivot.add(spot);
-      const targetObj = new THREE.Object3D(); targetObj.position.set(x * 0.4, -4.5, -0.8);
-      scene.add(targetObj); spot.target = targetObj;
-      headPivot.rotation.x = Math.PI * 0.35;
-      fixGroup.add(headPivot); trussGroup.add(fixGroup);
-      return { spot, lens, color: colorHex, target: targetObj };
-    }
-    const fixtureCyan = createDownFacingSpotlight(0x00f0ff, -2.4, 0.0, 0.2);
-    const fixtureGold = createDownFacingSpotlight(0xffea00, 0.0, 0.2, -0.1);
-    const fixtureMagenta = createDownFacingSpotlight(0xff007f, 2.4, 0.0, 0.2);
-    scene.add(trussGroup);
-
-    function updateStudioLighting(power) {
-      const val = power ? 5.0 : 0;
-      deskLampLight.intensity = power ? 2.5 : 0;
-      hostSpotlight.intensity = power ? 9.0 : 0;
-      fixtureCyan.spot.intensity = val;
-      fixtureGold.spot.intensity = val;
-      fixtureMagenta.spot.intensity = val;
-      fixtureCyan.lens.material.color.setHex(power ? fixtureCyan.color : 0x050505);
-      fixtureGold.lens.material.color.setHex(power ? fixtureGold.color : 0x050505);
-      fixtureMagenta.lens.material.color.setHex(power ? fixtureMagenta.color : 0x050505);
-    }
-
-    const miniDiorama = new THREE.Group(); miniDiorama.position.set(0, 3.95, -9);
-    const feltCarpet = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48), new THREE.MeshStandardMaterial({ color: 0x271147 }));
-    feltCarpet.position.y = 0.44;
-    miniDiorama.add(feltCarpet);
-
-    const miniWall = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI / 2, Math.PI), new THREE.MeshStandardMaterial({ color: 0x15092a, side: THREE.BackSide }));
-    miniWall.position.y = 2.65; miniDiorama.add(miniWall);
-
-    const p1PodiumGroup = new THREE.Group();
-    const p1PodiumBase = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.40, 0.48, 0.55, 20),
-      new THREE.MeshStandardMaterial({ color: 0x1b0c30, metalness: 0.5, roughness: 0.3 })
-    );
-    p1PodiumBase.position.y = 0.275;
-    p1PodiumGroup.add(p1PodiumBase);
-
-    const p1PodiumRim = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42, 0.42, 0.04, 20),
-      new THREE.MeshStandardMaterial({ color: 0x00d2d3, metalness: 0.9, roughness: 0.2 })
-    );
-    p1PodiumRim.position.y = 0.56;
-    p1PodiumGroup.add(p1PodiumRim);
-    p1PodiumGroup.position.set(-1.6, 0.44, -2.2);
-    miniDiorama.add(p1PodiumGroup);
-    window.p1PodiumGroup = p1PodiumGroup;
-
-    const p2PodiumGroup = new THREE.Group();
-    const p2PodiumBase = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.40, 0.48, 0.55, 20),
-      new THREE.MeshStandardMaterial({ color: 0x1b0c30, metalness: 0.5, roughness: 0.3 })
-    );
-    p2PodiumBase.position.y = 0.275;
-    p2PodiumGroup.add(p2PodiumBase);
-
-    const p2PodiumRim = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42, 0.42, 0.04, 20),
-      new THREE.MeshStandardMaterial({ color: 0xff3838, metalness: 0.9, roughness: 0.2 })
-    );
-    p2PodiumRim.position.y = 0.56;
-    p2PodiumGroup.add(p2PodiumRim);
-    p2PodiumGroup.position.set(1.6, 0.44, -2.2);
-    miniDiorama.add(p2PodiumGroup);
-    window.p2PodiumGroup = p2PodiumGroup;
-
-    const wallClockCanvas = document.createElement('canvas');
-    wallClockCanvas.width = 256; wallClockCanvas.height = 128;
-    const wallClockCtx = wallClockCanvas.getContext('2d');
-    const wallClockTex = new THREE.CanvasTexture(wallClockCanvas);
-
-    function renderWallClockTexture(str) {
-      wallClockCtx.fillStyle = '#06020f';
-      wallClockCtx.fillRect(0, 0, 256, 128);
-      wallClockCtx.strokeStyle = '#00f0ff';
-      wallClockCtx.lineWidth = 4;
-      wallClockCtx.strokeRect(4, 4, 248, 120);
-
-      wallClockCtx.fillStyle = '#ffda66';
-      wallClockCtx.font = 'bold 18px monospace';
-      wallClockCtx.textAlign = 'center';
-      wallClockCtx.fillText("20-MIN SHOW CLOCK", 128, 36);
-
-      wallClockCtx.fillStyle = '#ff7675';
-      wallClockCtx.font = 'bold 50px monospace';
-      wallClockCtx.fillText(str, 128, 95);
-      wallClockTex.needsUpdate = true;
-    }
-    renderWallClockTexture("20:00");
-
-    const wallClockMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.4, 1.2),
-      new THREE.MeshBasicMaterial({ map: wallClockTex })
-    );
-    wallClockMesh.position.set(0, 6.2, -4.4);
-    miniDiorama.add(wallClockMesh);
-
-    const COUNTRIES = [
-      "France", "Netherlands", "Canada", "Sweden", "Italy", "Denmark",
-      "Brazil", "Australia", "Spain", "Germany", "UK", "Nigeria",
-      "United States", "Belgium"
-    ];
-
-    function createCountryFlagTexture(countryName) {
-      const c = document.createElement('canvas');
-      c.width = 256; c.height = 256;
-      const ctx = c.getContext('2d'); const w = 256; const h = 256;
-      ctx.fillStyle = '#1e1035'; ctx.fillRect(0, 0, w, h);
-      ctx.save(); ctx.beginPath(); ctx.arc(128, 128, 124, 0, Math.PI * 2); ctx.clip();
-
-      switch(countryName) {
-        case "France":
-          ctx.fillStyle = '#002654'; ctx.fillRect(0, 0, w / 3, h);
-          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(w / 3, 0, w / 3, h);
-          ctx.fillStyle = '#ED2939'; ctx.fillRect((w / 3) * 2, 0, w / 3, h);
-          break;
-        case "Netherlands":
-          ctx.fillStyle = '#AE1C28'; ctx.fillRect(0, 0, w, h / 3);
-          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, h / 3, w, h / 3);
-          ctx.fillStyle = '#21468B'; ctx.fillRect(0, (h / 3) * 2, w, h / 3);
-          break;
-        case "Canada":
-          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
-          ctx.fillStyle = '#FF0000'; ctx.fillRect(0, 0, w * 0.28, h); ctx.fillRect(w * 0.72, 0, w * 0.28, h);
-          ctx.beginPath(); ctx.arc(128, 128, 36, 0, Math.PI * 2); ctx.fill();
-          break;
-        case "Brazil":
-          ctx.fillStyle = '#009739'; ctx.fillRect(0, 0, w, h);
-          ctx.fillStyle = '#FEDD00';
-          ctx.beginPath(); ctx.moveTo(128, 24); ctx.lineTo(236, 128); ctx.lineTo(128, 232); ctx.lineTo(20, 128); ctx.closePath(); ctx.fill();
-          ctx.fillStyle = '#012169'; ctx.beginPath(); ctx.arc(128, 128, 52, 0, Math.PI * 2); ctx.fill();
-          ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(128, 134, 46, 3.4, 6.0); ctx.stroke();
-          break;
-        case "Sweden":
-          ctx.fillStyle = '#006AA7'; ctx.fillRect(0, 0, w, h);
-          ctx.fillStyle = '#FECC00';
-          ctx.fillRect(75, 0, 36, h); ctx.fillRect(0, 110, w, 36);
-          break;
-        case "Italy":
-          ctx.fillStyle = '#009246'; ctx.fillRect(0, 0, w / 3, h);
-          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(w / 3, 0, w / 3, h);
-          ctx.fillStyle = '#CE2B37'; ctx.fillRect((w / 3) * 2, 0, w / 3, h);
-          break;
-        case "Denmark":
-          ctx.fillStyle = '#C60C30'; ctx.fillRect(0, 0, w, h);
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(80, 0, 34, h); ctx.fillRect(0, 111, w, 34);
-          break;
-        case "Australia":
-          ctx.fillStyle = '#00008B'; ctx.fillRect(0, 0, w, h);
-          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, 120, 120);
-          ctx.fillStyle = '#CC0000'; ctx.fillRect(48, 0, 24, 120); ctx.fillRect(0, 48, 120, 24);
-          ctx.fillStyle = '#FFFFFF';
-          [[60, 180], [180, 70], [210, 120], [180, 190], [150, 130]].forEach(([sx, sy]) => {
-            ctx.beginPath(); ctx.arc(sx, sy, 10, 0, Math.PI * 2); ctx.fill();
-          });
-          break;
-        case "Spain":
-          ctx.fillStyle = '#AA151B'; ctx.fillRect(0, 0, w, h);
-          ctx.fillStyle = '#F1BF00'; ctx.fillRect(0, h * 0.25, w, h * 0.5);
-          ctx.fillStyle = '#AA151B';
-          ctx.beginPath(); ctx.arc(80, 128, 22, 0, Math.PI * 2); ctx.fill();
-          break;
-        case "Germany":
-          ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, w, h / 3);
-          ctx.fillStyle = '#DD0000'; ctx.fillRect(0, h / 3, w, h / 3);
-          ctx.fillStyle = '#FFCE00'; ctx.fillRect(0, (h / 3) * 2, w, h / 3);
-          break;
-        case "UK":
-          ctx.fillStyle = '#012169'; ctx.fillRect(0, 0, w, h);
-          ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 36;
-          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w, h); ctx.moveTo(w, 0); ctx.lineTo(0, h); ctx.stroke();
-          ctx.strokeStyle = '#C8102E'; ctx.lineWidth = 14;
-          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w, h); ctx.moveTo(w, 0); ctx.lineTo(0, h); ctx.stroke();
-          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(100, 0, 56, h); ctx.fillRect(0, 100, w, 56);
-          ctx.fillStyle = '#C8102E'; ctx.fillRect(112, 0, 32, h); ctx.fillRect(0, 112, w, 32);
-          break;
-        case "Nigeria":
-          ctx.fillStyle = '#008751'; ctx.fillRect(0, 0, w / 3, h);
-          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(w / 3, 0, w / 3, h);
-          ctx.fillStyle = '#008751'; ctx.fillRect((w / 3) * 2, 0, w / 3, h);
-          break;
-        case "United States":
-          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
-          for (let s = 0; s < 13; s++) {
-            if (s % 2 === 0) {
-              ctx.fillStyle = '#B22234';
-              ctx.fillRect(0, s * (h / 13), w, Math.ceil(h / 13));
-            }
-          }
-          ctx.fillStyle = '#3C3B6E'; ctx.fillRect(0, 0, w * 0.48, h * 0.54);
-          ctx.fillStyle = '#FFFFFF';
-          for (let r = 18; r < 125; r += 26) {
-            for (let col = 16; col < 115; col += 24) {
-              ctx.beginPath(); ctx.arc(col, r, 4, 0, Math.PI * 2); ctx.fill();
-            }
-          }
-          break;
-        case "Belgium":
-          ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, w / 3, h);
-          ctx.fillStyle = '#FDDA24'; ctx.fillRect(w / 3, 0, w / 3, h);
-          ctx.fillStyle = '#EF3340'; ctx.fillRect((w / 3) * 2, 0, w / 3, h);
-          break;
-        default:
-          ctx.fillStyle = '#22143b'; ctx.fillRect(0, 0, w, h);
+      break;
+    case "Spain":
+      ctx.fillStyle = '#AA151B'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#F1BF00'; ctx.fillRect(0, h * 0.25, w, h * 0.5);
+      ctx.fillStyle = '#AA151B';
+      ctx.beginPath(); ctx.arc(80, 128, 22, 0, Math.PI * 2); ctx.fill();
+      break;
+    case "Germany":
+      ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, w, h / 3);
+      ctx.fillStyle = '#DD0000'; ctx.fillRect(0, h / 3, w, h / 3);
+      ctx.fillStyle = '#FFCE00'; ctx.fillRect(0, (h / 3) * 2, w, h / 3);
+      break;
+    case "UK":
+      ctx.fillStyle = '#012169'; ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 36;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w, h); ctx.moveTo(w, 0); ctx.lineTo(0, h); ctx.stroke();
+      ctx.strokeStyle = '#C8102E'; ctx.lineWidth = 14;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w, h); ctx.moveTo(w, 0); ctx.lineTo(0, h); ctx.stroke();
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(100, 0, 56, h); ctx.fillRect(0, 100, w, 56);
+      ctx.fillStyle = '#C8102E'; ctx.fillRect(112, 0, 32, h); ctx.fillRect(0, 112, w, 32);
+      break;
+    case "Nigeria":
+      ctx.fillStyle = '#008751'; ctx.fillRect(0, 0, w / 3, h);
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(w / 3, 0, w / 3, h);
+      ctx.fillStyle = '#008751'; ctx.fillRect((w / 3) * 2, 0, w / 3, h);
+      break;
+    case "United States":
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
+      for (let s = 0; s < 13; s++) {
+        if (s % 2 === 0) {
+          ctx.fillStyle = '#B22234';
+          ctx.fillRect(0, s * (h / 13), w, Math.ceil(h / 13));
+        }
       }
-      ctx.restore();
+      ctx.fillStyle = '#3C3B6E'; ctx.fillRect(0, 0, w * 0.48, h * 0.54);
+      ctx.fillStyle = '#FFFFFF';
+      for (let r = 18; r < 125; r += 26) {
+        for (let col = 16; col < 115; col += 24) {
+          ctx.beginPath(); ctx.arc(col, r, 4, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      break;
+    case "Belgium":
+      ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, w / 3, h);
+      ctx.fillStyle = '#FDDA24'; ctx.fillRect(w / 3, 0, w / 3, h);
+      ctx.fillStyle = '#EF3340'; ctx.fillRect((w / 3) * 2, 0, w / 3, h);
+      break;
+    default:
+      ctx.fillStyle = '#22143b'; ctx.fillRect(0, 0, w, h);
+  }
+  ctx.restore();
 
-      ctx.strokeStyle = '#e6c875'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(128, 128, 123, 0, Math.PI * 2); ctx.stroke();
-      const tex = new THREE.CanvasTexture(c); tex.needsUpdate = true; return tex;
+  ctx.strokeStyle = '#e6c875'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(128, 128, 123, 0, Math.PI * 2); ctx.stroke();
+  const tex = new THREE.CanvasTexture(c); tex.needsUpdate = true; return tex;
+}
+
+const flagTextures = COUNTRIES.map(cName => createCountryFlagTexture(cName));
+const boardTileCoords = [];
+const spiralCenterZ = 1.8;
+const totalTiles = 32;
+
+for (let i = 0; i < totalTiles; i++) {
+  const angle = i * 0.48;
+  const radius = 0.7 + (i * 0.135);
+  const x = Math.cos(angle) * radius;
+  const z = spiralCenterZ + (Math.sin(angle) * (radius * 0.88));
+  const countryName = COUNTRIES[i % COUNTRIES.length];
+
+  boardTileCoords.push({ x, z, country: countryName });
+
+  const sideMat = new THREE.MeshStandardMaterial({ color: 0x241e33, metalness: 0.6, roughness: 0.3 });
+  const topMat = new THREE.MeshBasicMaterial({ map: flagTextures[i % flagTextures.length] });
+  const botMat = new THREE.MeshBasicMaterial({ color: 0x110d1c });
+
+  const tile = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.28, 0.30, 0.08, 24),
+    [sideMat, topMat, botMat]
+  );
+  tile.position.set(x, 0.48, z);
+  miniDiorama.add(tile);
+}
+
+function updatePawnNameBadge(pawnGroup, displayName) {
+  if (!pawnGroup || !pawnGroup.userData || !pawnGroup.userData.badgeCanvas) return;
+  const canvas = pawnGroup.userData.badgeCanvas;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width; const h = canvas.height;
+  const tagColor = pawnGroup.userData.tagColor || '#00d2d3';
+
+  ctx.clearRect(0, 0, w, h);
+
+  const r = 24;
+  ctx.fillStyle = '#0a0314'; ctx.strokeStyle = tagColor; ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.moveTo(r, 4); ctx.lineTo(w - r, 4); ctx.quadraticCurveTo(w - 4, 4, w - 4, r);
+  ctx.lineTo(w - 4, h - r); ctx.quadraticCurveTo(w - 4, h - 4, w - r, h - 4);
+  ctx.lineTo(r, h - 4); ctx.quadraticCurveTo(4, h - 4, 4, h - r);
+  ctx.lineTo(4, r); ctx.quadraticCurveTo(4, 4, r, 4);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+
+  ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const cleanName = (displayName || "PLAYER").toUpperCase().trim();
+  let fontSize = 48;
+  if (cleanName.length > 8) fontSize = 36;
+  if (cleanName.length > 12) fontSize = 28;
+
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.fillText(cleanName, w / 2, h / 2 + 2);
+
+  if (pawnGroup.userData.badgeTexture) {
+    pawnGroup.userData.badgeTexture.needsUpdate = true;
+  }
+}
+
+function createPlayerPawn(colorHex, initialName) {
+  const pawn = new THREE.Group();
+  const baseMat = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.6, roughness: 0.25 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.10, 0.04, 16), baseMat);
+  base.position.y = 0.02; pawn.add(base);
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 16), baseMat);
+  body.position.y = 0.12; pawn.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 16), baseMat);
+  head.position.y = 0.22; pawn.add(head);
+
+  const bCanvas = document.createElement('canvas');
+  bCanvas.width = 256; bCanvas.height = 96;
+  const bTex = new THREE.CanvasTexture(bCanvas);
+
+  const badgeMat = new THREE.MeshBasicMaterial({
+    map: bTex, transparent: true, side: THREE.DoubleSide, depthWrite: false
+  });
+  const badgeMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.13), badgeMat);
+  badgeMesh.position.set(0, 0.35, 0);
+  pawn.add(badgeMesh);
+
+  const hexStr = '#' + colorHex.toString(16).padStart(6, '0');
+  pawn.userData = {
+    badgeCanvas: bCanvas, badgeTexture: bTex, badgeMesh: badgeMesh, tagColor: hexStr
+  };
+  updatePawnNameBadge(pawn, initialName);
+  return pawn;
+}
+
+let p1Index = 0;
+let p2Index = 0;
+const pawn1 = createPlayerPawn(0x00d2d3, contestantNames["goody-contestant-1"] || "Player 1");
+pawn1.position.set(boardTileCoords[0].x - 0.08, 0.52, boardTileCoords[0].z);
+pawn1.visible = false;
+miniDiorama.add(pawn1);
+
+const pawn2 = createPlayerPawn(0xff3838, contestantNames["goody-contestant-2"] || "Player 2");
+pawn2.position.set(boardTileCoords[0].x + 0.08, 0.52, boardTileCoords[0].z);
+pawn2.visible = false;
+miniDiorama.add(pawn2);
+
+const qBoardCanvas = document.createElement('canvas');
+qBoardCanvas.width = 512; qBoardCanvas.height = 384;
+const qBoardCtx = qBoardCanvas.getContext('2d');
+const qBoardTex = new THREE.CanvasTexture(qBoardCanvas);
+
+let isLocalOnPodium1 = false;
+let isLocalOnPodium2 = false;
+
+function drawStudioDie(ctx, cx, cy, size, value, glowColor = '#00f0ff', rotationAngle = 0) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (rotationAngle !== 0) ctx.rotate(rotationAngle);
+
+  const half = size / 2;
+  const radius = size * 0.16;
+
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetX = 3;
+  ctx.shadowOffsetY = 5;
+
+  ctx.beginPath();
+  ctx.moveTo(-half + radius, -half);
+  ctx.lineTo(half - radius, -half);
+  ctx.quadraticCurveTo(half, -half, half, -half + radius);
+  ctx.lineTo(half, half - radius);
+  ctx.quadraticCurveTo(half, half, half - radius, half);
+  ctx.lineTo(-half + radius, half);
+  ctx.quadraticCurveTo(-half, half, -half, half - radius);
+  ctx.lineTo(-half, -half + radius);
+  ctx.quadraticCurveTo(-half, -half, -half + radius, -half);
+  ctx.closePath();
+
+  const grad = ctx.createLinearGradient(-half, -half, half, half);
+  grad.addColorStop(0, '#ffffff');
+  grad.addColorStop(0.5, '#f5f6fa');
+  grad.addColorStop(1, '#dcdde1');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.strokeStyle = glowColor;
+  ctx.lineWidth = 3.5;
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(-half + 4, -half + 4, size - 8, size - 8);
+
+  ctx.fillStyle = '#e74c3c';
+  const r = size * 0.085;
+  const p = size * 0.26;
+
+  const pip = (px, py) => {
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  };
+
+  if (value % 2 === 1) pip(0, 0);
+  if (value >= 2) { pip(-p, -p); pip(p, p); }
+  if (value >= 4) { pip(p, -p); pip(-p, p); }
+  if (value === 6) { pip(-p, 0); pip(p, 0); }
+
+  ctx.restore();
+}
+
+function renderStageQuestionBoard() {
+  qBoardCtx.fillStyle = '#120726';
+  qBoardCtx.fillRect(0, 0, 512, 384);
+  qBoardCtx.strokeStyle = '#00f0ff';
+  qBoardCtx.lineWidth = 6;
+  qBoardCtx.strokeRect(3, 3, 506, 378);
+
+  if (gameState === "INTERMISSION") {
+    qBoardCtx.fillStyle = '#ff7675';
+    qBoardCtx.font = 'bold 24px sans-serif';
+    qBoardCtx.textAlign = 'center';
+    qBoardCtx.fillText("STUDIO INTERMISSION", 256, 70);
+
+    qBoardCtx.fillStyle = '#00f0ff';
+    qBoardCtx.fillRect(36, 88, 440, 2);
+
+    qBoardCtx.fillStyle = '#ffda66';
+    qBoardCtx.font = 'bold 18px monospace';
+    const missingName = contestantNames[droppedOutContestant] || (droppedOutContestant === "goody-contestant-1" ? "Player 1" : "Player 2");
+    qBoardCtx.fillText(`LOST CONNECTION TO ${missingName.toUpperCase()}`, 256, 140);
+
+    qBoardCtx.fillStyle = '#ffffff';
+    qBoardCtx.font = '16px sans-serif';
+    qBoardCtx.fillText("WAITING FOR RECONNECT...", 256, 195);
+  } else if (gameState === "MODE_PROMPT") {
+    qBoardCtx.fillStyle = '#ffda66';
+    qBoardCtx.font = 'bold 24px sans-serif';
+    qBoardCtx.textAlign = 'center';
+    qBoardCtx.fillText("CHOOSE GAME MODE", 256, 50);
+
+    qBoardCtx.fillStyle = '#00f0ff';
+    qBoardCtx.fillRect(36, 66, 440, 2);
+
+    if (!isLocalOnPodium1) {
+      qBoardCtx.fillStyle = '#ff7675';
+      qBoardCtx.font = 'bold 16px sans-serif';
+      qBoardCtx.fillText("STEP ON PODIUM 1 WITH YOUR PLUSHIE TO UNLOCK!", 256, 180);
+    } else {
+      qBoardCtx.fillStyle = '#ffffff';
+      qBoardCtx.font = '15px sans-serif';
+      qBoardCtx.fillText("SELECT START MODE (TAP OR PRESS 1-3):", 256, 105);
+
+      qBoardCtx.fillStyle = '#3498db';
+      qBoardCtx.fillRect(40, 125, 432, 42);
+      qBoardCtx.fillStyle = '#ffffff';
+      qBoardCtx.font = 'bold 16px monospace';
+      qBoardCtx.fillText("[1] 1-PLAYER SOLO RACE", 256, 152);
+
+      qBoardCtx.fillStyle = '#e74c3c';
+      qBoardCtx.fillRect(40, 178, 432, 42);
+      qBoardCtx.fillStyle = '#ffffff';
+      qBoardCtx.font = 'bold 16px monospace';
+      qBoardCtx.fillText("[2] 1-PLAYER VS GOODY", 256, 205);
+
+      qBoardCtx.fillStyle = '#9b59b6';
+      qBoardCtx.fillRect(40, 231, 432, 42);
+      qBoardCtx.fillStyle = '#ffffff';
+      qBoardCtx.font = 'bold 16px monospace';
+      qBoardCtx.fillText("[3] 2-PLAYER MODE", 256, 258);
+
+      qBoardCtx.fillStyle = '#39ff14';
+      qBoardCtx.font = 'bold 13px monospace';
+      qBoardCtx.fillText("TAP ANY OPTION OR USE 1, 2, 3", 256, 315);
+    }
+  } else if (gameState === "OPENING_DUEL") {
+    qBoardCtx.fillStyle = '#ffda66';
+    qBoardCtx.font = 'bold 22px sans-serif';
+    qBoardCtx.textAlign = 'center';
+    qBoardCtx.fillText("OPENING DICE ROLL", 256, 40);
+
+    if (isDiceTimerActive) {
+      qBoardCtx.fillStyle = '#ff7675';
+      qBoardCtx.font = 'bold 18px monospace';
+      qBoardCtx.textAlign = 'right';
+      qBoardCtx.fillText(`⏱️ ${diceCountdown}s`, 485, 40);
     }
 
-    const flagTextures = COUNTRIES.map(cName => createCountryFlagTexture(cName));
-    const boardTileCoords = [];
-    const spiralCenterZ = 1.8;
-    const totalTiles = 32;
+    qBoardCtx.fillStyle = '#00f0ff';
+    qBoardCtx.fillRect(36, 54, 440, 2);
 
-    for (let i = 0; i < totalTiles; i++) {
-      const angle = i * 0.48;
-      const radius = 0.7 + (i * 0.135);
-      const x = Math.cos(angle) * radius;
-      const z = spiralCenterZ + (Math.sin(angle) * (radius * 0.88));
-      const countryName = COUNTRIES[i % COUNTRIES.length];
+    qBoardCtx.fillStyle = '#ffffff';
+    qBoardCtx.font = '15px sans-serif';
+    qBoardCtx.textAlign = 'center';
+    qBoardCtx.fillText("TAP SCREEN TO FREEZE & LOCK IN YOUR DICE!", 256, 80);
 
-      boardTileCoords.push({ x, z, country: countryName });
+    const nowMs = performance.now();
+    const randSeed1 = Math.floor((nowMs / 65) % 6) + 1;
+    const randSeed2 = Math.floor((nowMs / 85 + 2) % 6) + 1;
 
-      const sideMat = new THREE.MeshStandardMaterial({ color: 0x241e33, metalness: 0.6, roughness: 0.3 });
-      const topMat = new THREE.MeshBasicMaterial({ map: flagTextures[i % flagTextures.length] });
-      const botMat = new THREE.MeshBasicMaterial({ color: 0x110d1c });
+    const valP1 = isDiceRollingP1 ? randSeed1 : (p1RollVal || 1);
+    const valP2 = isDiceRollingP2 ? randSeed2 : (p2RollVal || 1);
 
-      const tile = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.28, 0.30, 0.08, 24),
-        [sideMat, topMat, botMat]
-      );
-      tile.position.set(x, 0.48, z);
-      miniDiorama.add(tile);
+    const rot1 = isDiceRollingP1 ? Math.sin(nowMs * 0.012) * 0.15 : 0;
+    const rot2 = isDiceRollingP2 ? Math.cos(nowMs * 0.014) * 0.15 : 0;
+
+    if (isSoloMode) {
+      drawStudioDie(qBoardCtx, 256, 175, 96, valP1, isDiceRollingP1 ? '#39ff14' : '#00f0ff', rot1);
+
+      qBoardCtx.fillStyle = isDiceRollingP1 ? '#ffda66' : '#39ff14';
+      qBoardCtx.font = 'bold 18px monospace';
+      qBoardCtx.textAlign = 'center';
+      qBoardCtx.fillText(isDiceRollingP1 ? `${contestantNames["goody-contestant-1"].toUpperCase()} OPENING ROLL` : `LOCKED IN: ${p1RollVal}!`, 256, 260);
+    } else {
+      drawStudioDie(qBoardCtx, 170, 165, 82, valP1, isDiceRollingP1 ? '#00d2d3' : '#39ff14', rot1);
+      drawStudioDie(qBoardCtx, 342, 165, 82, valP2, isDiceRollingP2 ? '#ff3838' : '#39ff14', rot2);
+
+      qBoardCtx.fillStyle = isDiceRollingP1 ? '#00d2d3' : '#39ff14';
+      qBoardCtx.font = 'bold 15px monospace';
+      qBoardCtx.textAlign = 'center';
+      qBoardCtx.fillText(isDiceRollingP1 ? contestantNames["goody-contestant-1"].toUpperCase() : `LOCKED: ${p1RollVal}`, 170, 245);
+
+      qBoardCtx.fillStyle = isDiceRollingP2 ? '#ff3838' : '#39ff14';
+      qBoardCtx.fillText(isDiceRollingP2 ? contestantNames["goody-contestant-2"].toUpperCase() : `LOCKED: ${p2RollVal}`, 342, 245);
+
+      qBoardCtx.fillStyle = '#ffda66';
+      qBoardCtx.font = 'bold 18px monospace';
+      qBoardCtx.fillText("VS", 256, 170);
     }
 
-    function updatePawnNameBadge(pawnGroup, displayName) {
-      if (!pawnGroup || !pawnGroup.userData || !pawnGroup.userData.badgeCanvas) return;
-      const canvas = pawnGroup.userData.badgeCanvas;
-      const ctx = canvas.getContext('2d');
-      const w = canvas.width; const h = canvas.height;
-      const tagColor = pawnGroup.userData.tagColor || '#00d2d3';
+    qBoardCtx.fillStyle = '#39ff14';
+    qBoardCtx.font = 'bold 16px monospace';
+    qBoardCtx.textAlign = 'center';
+    qBoardCtx.fillText("[ TAP SCREEN TO STOP DICE ]", 256, 325);
 
-      ctx.clearRect(0, 0, w, h);
+  } else if (activeRecap) {
+    qBoardCtx.fillStyle = activeRecap.isCorrect ? '#00b894' : '#ff7675';
+    qBoardCtx.font = 'bold 22px sans-serif';
+    qBoardCtx.textAlign = 'center';
+    qBoardCtx.fillText(activeRecap.isCorrect ? " CORRECT! WHAT WE LEARNED:" : " INCORRECT! WHAT WE LEARNED:", 256, 44);
 
-      const r = 24;
-      ctx.fillStyle = '#0a0314'; ctx.strokeStyle = tagColor; ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.moveTo(r, 4); ctx.lineTo(w - r, 4); ctx.quadraticCurveTo(w - 4, 4, w - 4, r);
-      ctx.lineTo(w - 4, h - r); ctx.quadraticCurveTo(w - 4, h - 4, w - r, h - 4);
-      ctx.lineTo(r, h - 4); ctx.quadraticCurveTo(4, h - 4, 4, h - r);
-      ctx.lineTo(4, r); ctx.quadraticCurveTo(4, 4, r, 4);
-      ctx.closePath(); ctx.fill(); ctx.stroke();
+    qBoardCtx.fillStyle = '#ffda66';
+    qBoardCtx.font = 'bold 16px monospace';
+    qBoardCtx.fillText(` COUNTRY: ${activeRecap.country.toUpperCase()}`, 256, 78);
 
-      ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const cleanName = (displayName || "PLAYER").toUpperCase().trim();
-      let fontSize = 48;
-      if (cleanName.length > 8) fontSize = 36;
-      if (cleanName.length > 12) fontSize = 28;
-     
-      ctx.font = `bold ${fontSize}px sans-serif`;
-      ctx.fillText(cleanName, w / 2, h / 2 + 2);
+    qBoardCtx.fillStyle = '#00f0ff';
+    qBoardCtx.fillRect(36, 94, 440, 2);
 
-      if (pawnGroup.userData.badgeTexture) {
-        pawnGroup.userData.badgeTexture.needsUpdate = true;
+    qBoardCtx.fillStyle = '#ffffff';
+    qBoardCtx.font = '16px sans-serif';
+    qBoardCtx.textAlign = 'center';
+
+    const words = activeRecap.text.split(' ');
+    let line = '';
+    let y = 140;
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      const metrics = qBoardCtx.measureText(testLine);
+      if (metrics.width > 440 && n > 0) {
+        qBoardCtx.fillText(line, 256, y);
+        line = words[n] + ' ';
+        y += 28;
+      } else {
+        line = testLine;
       }
     }
+    qBoardCtx.fillText(line, 256, y);
 
-    function createPlayerPawn(colorHex, initialName) {
-      const pawn = new THREE.Group();
-      const baseMat = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.6, roughness: 0.25 });
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.10, 0.04, 16), baseMat);
-      base.position.y = 0.02; pawn.add(base);
-      const body = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 16), baseMat);
-      body.position.y = 0.12; pawn.add(body);
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 16), baseMat);
-      head.position.y = 0.22; pawn.add(head);
+    qBoardCtx.fillStyle = '#39ff14';
+    qBoardCtx.font = '14px monospace';
+    qBoardCtx.fillText("NEXT TURN STARTING SHORTLY...", 256, 342);
+  } else if (activeQuestion) {
+    const pName = isTieBreakerActive ? "SUDDEN DEATH TIE-BREAKER" : `${contestantNames[activePlayer].toUpperCase()}'S TURN`;
+    qBoardCtx.fillStyle = '#ffda66';
+    qBoardCtx.font = 'bold 18px monospace';
+    qBoardCtx.textAlign = 'left';
+    qBoardCtx.fillText(` ${activeQuestion.country.toUpperCase()} [${pName}]`, 20, 36);
 
-      const bCanvas = document.createElement('canvas');
-      bCanvas.width = 256; bCanvas.height = 96;
-      const bTex = new THREE.CanvasTexture(bCanvas);
-
-      const badgeMat = new THREE.MeshBasicMaterial({
-        map: bTex, transparent: true, side: THREE.DoubleSide, depthWrite: false
-      });
-      const badgeMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.13), badgeMat);
-      badgeMesh.position.set(0, 0.35, 0);
-      pawn.add(badgeMesh);
-
-      const hexStr = '#' + colorHex.toString(16).padStart(6, '0');
-      pawn.userData = {
-        badgeCanvas: bCanvas, badgeTexture: bTex, badgeMesh: badgeMesh, tagColor: hexStr
-      };
-      updatePawnNameBadge(pawn, initialName);
-      return pawn;
+    if (isQuestionTimerActive && questionTimer > 0 && !isTieBreakerActive) {
+      qBoardCtx.fillStyle = '#ff7675';
+      qBoardCtx.font = 'bold 20px monospace';
+      qBoardCtx.textAlign = 'right';
+      qBoardCtx.fillText(` ${questionTimer}s`, 492, 36);
     }
 
-    let p1Index = 0;
-    let p2Index = 0;
-    const pawn1 = createPlayerPawn(0x00d2d3, contestantNames["goody-contestant-1"] || "Player 1");
-    pawn1.position.set(boardTileCoords[0].x - 0.08, 0.52, boardTileCoords[0].z);
-    pawn1.visible = false;
-    miniDiorama.add(pawn1);
-
-    const pawn2 = createPlayerPawn(0xff3838, contestantNames["goody-contestant-2"] || "Player 2");
-    pawn2.position.set(boardTileCoords[0].x + 0.08, 0.52, boardTileCoords[0].z);
-    pawn2.visible = false;
-    miniDiorama.add(pawn2);
-
-    const qBoardCanvas = document.createElement('canvas');
-    qBoardCanvas.width = 512; qBoardCanvas.height = 384;
-    const qBoardCtx = qBoardCanvas.getContext('2d');
-    const qBoardTex = new THREE.CanvasTexture(qBoardCanvas);
-
-    let isLocalOnPodium1 = false;
-    let isLocalOnPodium2 = false;
-
-    function drawStudioDie(ctx, cx, cy, size, value, glowColor = '#00f0ff', rotationAngle = 0) {
-      ctx.save();
-      ctx.translate(cx, cy);
-      if (rotationAngle !== 0) ctx.rotate(rotationAngle);
-
-      const half = size / 2;
-      const radius = size * 0.16;
-
-      ctx.shadowColor = glowColor;
-      ctx.shadowBlur = 18;
-      ctx.shadowOffsetX = 3;
-      ctx.shadowOffsetY = 5;
-
-      ctx.beginPath();
-      ctx.moveTo(-half + radius, -half);
-      ctx.lineTo(half - radius, -half);
-      ctx.quadraticCurveTo(half, -half, half, -half + radius);
-      ctx.lineTo(half, half - radius);
-      ctx.quadraticCurveTo(half, half, half - radius, half);
-      ctx.lineTo(-half + radius, half);
-      ctx.quadraticCurveTo(-half, half, -half, half - radius);
-      ctx.lineTo(-half, -half + radius);
-      ctx.quadraticCurveTo(-half, -half, -half + radius, -half);
-      ctx.closePath();
-
-      const grad = ctx.createLinearGradient(-half, -half, half, half);
-      grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.5, '#f5f6fa');
-      grad.addColorStop(1, '#dcdde1');
-      ctx.fillStyle = grad;
-      ctx.fill();
-
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
-      ctx.strokeStyle = glowColor;
-      ctx.lineWidth = 3.5;
-      ctx.stroke();
-
-      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(-half + 4, -half + 4, size - 8, size - 8);
-
-      ctx.fillStyle = '#e74c3c';
-      const r = size * 0.085;
-      const p = size * 0.26;
-
-      const pip = (px, py) => {
-        ctx.beginPath();
-        ctx.arc(px, py, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      };
-
-      if (value % 2 === 1) pip(0, 0);
-      if (value >= 2) { pip(-p, -p); pip(p, p); }
-      if (value >= 4) { pip(p, -p); pip(-p, p); }
-      if (value === 6) { pip(-p, 0); pip(p, 0); }
-
-      ctx.restore();
+    qBoardCtx.fillStyle = '#ffffff';
+    qBoardCtx.font = '15px sans-serif';
+    qBoardCtx.textAlign = 'left';
+    const words = activeQuestion.q.split(' ');
+    let line = '';
+    let y = 72;
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      const metrics = qBoardCtx.measureText(testLine);
+      if (metrics.width > 470 && n > 0) {
+        qBoardCtx.fillText(line, 20, y);
+        line = words[n] + ' ';
+        y += 22;
+      } else {
+        line = testLine;
+      }
     }
+    qBoardCtx.fillText(line, 20, y);
 
-    function renderStageQuestionBoard() {
-      qBoardCtx.fillStyle = '#120726';
-      qBoardCtx.fillRect(0, 0, 512, 384);
-      qBoardCtx.strokeStyle = '#00f0ff';
-      qBoardCtx.lineWidth = 6;
-      qBoardCtx.strokeRect(3, 3, 506, 378);
+    const letters = ["A", "B", "C", "D"];
+    activeQuestion.options.forEach((opt, idx) => {
+      const optY = 210 + (idx * 40);
+      const isSelected = stageSelectedOption === opt;
 
-      if (gameState === "INTERMISSION") {
-        qBoardCtx.fillStyle = '#ff7675';
-        qBoardCtx.font = 'bold 24px sans-serif';
-        qBoardCtx.textAlign = 'center';
-        qBoardCtx.fillText("STUDIO INTERMISSION", 256, 70);
-
-        qBoardCtx.fillStyle = '#00f0ff';
-        qBoardCtx.fillRect(36, 88, 440, 2);
-
-        qBoardCtx.fillStyle = '#ffda66';
-        qBoardCtx.font = 'bold 18px monospace';
-        const missingName = contestantNames[droppedOutContestant] || (droppedOutContestant === "goody-contestant-1" ? "Player 1" : "Player 2");
-        qBoardCtx.fillText(`LOST CONNECTION TO ${missingName.toUpperCase()}`, 256, 140);
-
-        qBoardCtx.fillStyle = '#ffffff';
-        qBoardCtx.font = '16px sans-serif';
-        qBoardCtx.fillText("WAITING FOR RECONNECT...", 256, 195);
-      } else if (gameState === "MODE_PROMPT") {
-        qBoardCtx.fillStyle = '#ffda66';
-        qBoardCtx.font = 'bold 24px sans-serif';
-        qBoardCtx.textAlign = 'center';
-        qBoardCtx.fillText("CHOOSE GAME MODE", 256, 50);
-
-        qBoardCtx.fillStyle = '#00f0ff';
-        qBoardCtx.fillRect(36, 66, 440, 2);
-
-        if (!isLocalOnPodium1) {
-          qBoardCtx.fillStyle = '#ff7675';
-          qBoardCtx.font = 'bold 16px sans-serif';
-          qBoardCtx.fillText("STEP ON PODIUM 1 WITH YOUR PLUSHIE TO UNLOCK!", 256, 180);
+      if (isSelected) {
+        if (stageOptionStatus === 'correct') {
+          qBoardCtx.fillStyle = '#00b894';
+          qBoardCtx.strokeStyle = '#55efc4';
+        } else if (stageOptionStatus === 'wrong') {
+          qBoardCtx.fillStyle = '#d63031';
+          qBoardCtx.strokeStyle = '#ff7675';
         } else {
-          qBoardCtx.fillStyle = '#ffffff';
-          qBoardCtx.font = '15px sans-serif';
-          qBoardCtx.fillText("SELECT START MODE (TAP OR PRESS 1-3):", 256, 105);
-
-          qBoardCtx.fillStyle = '#3498db';
-          qBoardCtx.fillRect(40, 125, 432, 42);
-          qBoardCtx.fillStyle = '#ffffff';
-          qBoardCtx.font = 'bold 16px monospace';
-          qBoardCtx.fillText("[1] 1-PLAYER SOLO RACE", 256, 152);
-
-          qBoardCtx.fillStyle = '#e74c3c';
-          qBoardCtx.fillRect(40, 178, 432, 42);
-          qBoardCtx.fillStyle = '#ffffff';
-          qBoardCtx.font = 'bold 16px monospace';
-          qBoardCtx.fillText("[2] 1-PLAYER VS GOODY", 256, 205);
-
-          qBoardCtx.fillStyle = '#9b59b6';
-          qBoardCtx.fillRect(40, 231, 432, 42);
-          qBoardCtx.fillStyle = '#ffffff';
-          qBoardCtx.font = 'bold 16px monospace';
-          qBoardCtx.fillText("[3] 2-PLAYER MODE", 256, 258);
-
-          qBoardCtx.fillStyle = '#39ff14';
-          qBoardCtx.font = 'bold 13px monospace';
-          qBoardCtx.fillText("TAP ANY OPTION OR USE 1, 2, 3", 256, 315);
+          qBoardCtx.fillStyle = '#6c5ce7';
+          qBoardCtx.strokeStyle = '#fdcb6e';
         }
-      } else if (gameState === "OPENING_DUEL") {
+      } else {
+        qBoardCtx.fillStyle = '#220f3d';
+        qBoardCtx.strokeStyle = '#a29bfe';
+      }
+
+      qBoardCtx.fillRect(20, optY - 24, 472, 32);
+      qBoardCtx.lineWidth = isSelected ? 4 : 2;
+      qBoardCtx.strokeRect(20, optY - 24, 472, 32);
+
+      qBoardCtx.fillStyle = isSelected ? '#ffffff' : '#ffda66';
+      qBoardCtx.font = 'bold 16px monospace';
+      qBoardCtx.fillText(`${letters[idx]})`, 30, optY - 2);
+
+      qBoardCtx.fillStyle = '#ffffff';
+      qBoardCtx.font = '14px sans-serif';
+      const trimmed = opt.length > 48 ? opt.substring(0, 48) + "..." : opt;
+      qBoardCtx.fillText(trimmed, 64, optY - 2);
+    });
+  } else {
+    if (!studioPower) {
+      qBoardCtx.fillStyle = '#ffda66';
+      qBoardCtx.font = 'bold 26px sans-serif';
+      qBoardCtx.textAlign = 'center';
+      qBoardCtx.fillText("THE GOODY TONIGHT SHOW", 256, 110);
+    } else {
+      const isCurrentPlayerTurn = isSoloMode ? (activePlayer === soloPlayerId) : (activePlayer !== goodyPlayerSlot);
+
+      if (gameState === "IN_PLAY" && (!hasPlayerRolledThisTurn || (hasPlayerRolledThisTurn && isPawnMoving && (p1RollVal !== null || p2RollVal !== null))) && isCurrentPlayerTurn) {
+        const pName = contestantNames[activePlayer];
+        const currentRolled = activePlayer === "goody-contestant-2" ? p2RollVal : p1RollVal;
+
         qBoardCtx.fillStyle = '#ffda66';
-        qBoardCtx.font = 'bold 22px sans-serif';
+        qBoardCtx.font = 'bold 20px monospace';
         qBoardCtx.textAlign = 'center';
-        qBoardCtx.fillText("OPENING DICE ROLL", 256, 40);
+        qBoardCtx.fillText(`🎲 ${pName.toUpperCase()}'S TURN TO ROLL 🎲`, 230, 40);
 
         if (isDiceTimerActive) {
           qBoardCtx.fillStyle = '#ff7675';
@@ -2182,890 +2852,791 @@
         }
 
         qBoardCtx.fillStyle = '#00f0ff';
-        qBoardCtx.fillRect(36, 54, 440, 2);
+        qBoardCtx.fillRect(36, 52, 440, 2);
 
-        qBoardCtx.fillStyle = '#ffffff';
-        qBoardCtx.font = '15px sans-serif';
-        qBoardCtx.textAlign = 'center';
-        qBoardCtx.fillText("TAP SCREEN TO FREEZE & LOCK IN YOUR DICE!", 256, 80);
+        const now = performance.now();
 
-        const nowMs = performance.now();
-        const randSeed1 = Math.floor((nowMs / 65) % 6) + 1;
-        const randSeed2 = Math.floor((nowMs / 85 + 2) % 6) + 1;
+        if (currentRolled !== null) {
+          drawStudioDie(qBoardCtx, 256, 155, 96, currentRolled, '#39ff14', 0);
 
-        const valP1 = isDiceRollingP1 ? randSeed1 : (p1RollVal || 1);
-        const valP2 = isDiceRollingP2 ? randSeed2 : (p2RollVal || 1);
-
-        const rot1 = isDiceRollingP1 ? Math.sin(nowMs * 0.012) * 0.15 : 0;
-        const rot2 = isDiceRollingP2 ? Math.cos(nowMs * 0.014) * 0.15 : 0;
-
-        if (isSoloMode) {
-          drawStudioDie(qBoardCtx, 256, 175, 96, valP1, isDiceRollingP1 ? '#39ff14' : '#00f0ff', rot1);
-
-          qBoardCtx.fillStyle = isDiceRollingP1 ? '#ffda66' : '#39ff14';
-          qBoardCtx.font = 'bold 18px monospace';
+          qBoardCtx.fillStyle = '#39ff14';
+          qBoardCtx.font = 'bold 24px monospace';
           qBoardCtx.textAlign = 'center';
-          qBoardCtx.fillText(isDiceRollingP1 ? `${contestantNames["goody-contestant-1"].toUpperCase()} OPENING ROLL` : `LOCKED IN: ${p1RollVal}!`, 256, 260);
-        } else {
-          drawStudioDie(qBoardCtx, 170, 165, 82, valP1, isDiceRollingP1 ? '#00d2d3' : '#39ff14', rot1);
-          drawStudioDie(qBoardCtx, 342, 165, 82, valP2, isDiceRollingP2 ? '#ff3838' : '#39ff14', rot2);
-
-          qBoardCtx.fillStyle = isDiceRollingP1 ? '#00d2d3' : '#39ff14';
-          qBoardCtx.font = 'bold 15px monospace';
-          qBoardCtx.textAlign = 'center';
-          qBoardCtx.fillText(isDiceRollingP1 ? contestantNames["goody-contestant-1"].toUpperCase() : `LOCKED: ${p1RollVal}`, 170, 245);
-
-          qBoardCtx.fillStyle = isDiceRollingP2 ? '#ff3838' : '#39ff14';
-          qBoardCtx.fillText(isDiceRollingP2 ? contestantNames["goody-contestant-2"].toUpperCase() : `LOCKED: ${p2RollVal}`, 342, 245);
-
-          qBoardCtx.fillStyle = '#ffda66';
-          qBoardCtx.font = 'bold 18px monospace';
-          qBoardCtx.fillText("VS", 256, 170);
-        }
-
-        qBoardCtx.fillStyle = '#39ff14';
-        qBoardCtx.font = 'bold 16px monospace';
-        qBoardCtx.textAlign = 'center';
-        qBoardCtx.fillText("[ TAP SCREEN TO STOP DICE ]", 256, 325);
-
-      } else if (activeRecap) {
-        qBoardCtx.fillStyle = activeRecap.isCorrect ? '#00b894' : '#ff7675';
-        qBoardCtx.font = 'bold 22px sans-serif';
-        qBoardCtx.textAlign = 'center';
-        qBoardCtx.fillText(activeRecap.isCorrect ? " CORRECT! WHAT WE LEARNED:" : " INCORRECT! WHAT WE LEARNED:", 256, 44);
-
-        qBoardCtx.fillStyle = '#ffda66';
-        qBoardCtx.font = 'bold 16px monospace';
-        qBoardCtx.fillText(` COUNTRY: ${activeRecap.country.toUpperCase()}`, 256, 78);
-
-        qBoardCtx.fillStyle = '#00f0ff';
-        qBoardCtx.fillRect(36, 94, 440, 2);
-
-        qBoardCtx.fillStyle = '#ffffff';
-        qBoardCtx.font = '16px sans-serif';
-        qBoardCtx.textAlign = 'center';
-
-        const words = activeRecap.text.split(' ');
-        let line = '';
-        let y = 140;
-        for (let n = 0; n < words.length; n++) {
-          const testLine = line + words[n] + ' ';
-          const metrics = qBoardCtx.measureText(testLine);
-          if (metrics.width > 440 && n > 0) {
-            qBoardCtx.fillText(line, 256, y);
-            line = words[n] + ' ';
-            y += 28;
-          } else {
-            line = testLine;
-          }
-        }
-        qBoardCtx.fillText(line, 256, y);
-
-        qBoardCtx.fillStyle = '#39ff14';
-        qBoardCtx.font = '14px monospace';
-        qBoardCtx.fillText("NEXT TURN STARTING SHORTLY...", 256, 342);
-      } else if (activeQuestion) {
-        const pName = isTieBreakerActive ? "SUDDEN DEATH TIE-BREAKER" : `${contestantNames[activePlayer].toUpperCase()}'S TURN`;
-        qBoardCtx.fillStyle = '#ffda66';
-        qBoardCtx.font = 'bold 18px monospace';
-        qBoardCtx.textAlign = 'left';
-        qBoardCtx.fillText(` ${activeQuestion.country.toUpperCase()} [${pName}]`, 20, 36);
-
-        if (isQuestionTimerActive && questionTimer > 0 && !isTieBreakerActive) {
-          qBoardCtx.fillStyle = '#ff7675';
-          qBoardCtx.font = 'bold 20px monospace';
-          qBoardCtx.textAlign = 'right';
-          qBoardCtx.fillText(` ${questionTimer}s`, 492, 36);
-        }
-
-        qBoardCtx.fillStyle = '#ffffff';
-        qBoardCtx.font = '15px sans-serif';
-        qBoardCtx.textAlign = 'left';
-        const words = activeQuestion.q.split(' ');
-        let line = '';
-        let y = 72;
-        for (let n = 0; n < words.length; n++) {
-          const testLine = line + words[n] + ' ';
-          const metrics = qBoardCtx.measureText(testLine);
-          if (metrics.width > 470 && n > 0) {
-            qBoardCtx.fillText(line, 20, y);
-            line = words[n] + ' ';
-            y += 22;
-          } else {
-            line = testLine;
-          }
-        }
-        qBoardCtx.fillText(line, 20, y);
-
-        const letters = ["A", "B", "C", "D"];
-        activeQuestion.options.forEach((opt, idx) => {
-          const optY = 210 + (idx * 40);
-          const isSelected = stageSelectedOption === opt;
-
-          if (isSelected) {
-            if (stageOptionStatus === 'correct') {
-              qBoardCtx.fillStyle = '#00b894';
-              qBoardCtx.strokeStyle = '#55efc4';
-            } else if (stageOptionStatus === 'wrong') {
-              qBoardCtx.fillStyle = '#d63031';
-              qBoardCtx.strokeStyle = '#ff7675';
-            } else {
-              qBoardCtx.fillStyle = '#6c5ce7';
-              qBoardCtx.strokeStyle = '#fdcb6e';
-            }
-          } else {
-            qBoardCtx.fillStyle = '#220f3d';
-            qBoardCtx.strokeStyle = '#a29bfe';
-          }
-
-          qBoardCtx.fillRect(20, optY - 24, 472, 32);
-          qBoardCtx.lineWidth = isSelected ? 4 : 2;
-          qBoardCtx.strokeRect(20, optY - 24, 472, 32);
-
-          qBoardCtx.fillStyle = isSelected ? '#ffffff' : '#ffda66';
-          qBoardCtx.font = 'bold 16px monospace';
-          qBoardCtx.fillText(`${letters[idx]})`, 30, optY - 2);
+          qBoardCtx.fillText(`LOCKED IN: ${currentRolled}!`, 256, 255);
 
           qBoardCtx.fillStyle = '#ffffff';
-          qBoardCtx.font = '14px sans-serif';
-          const trimmed = opt.length > 48 ? opt.substring(0, 48) + "..." : opt;
-          qBoardCtx.fillText(trimmed, 64, optY - 2);
-        });
-      } else {
-        if (!studioPower) {
-          qBoardCtx.fillStyle = '#ffda66';
-          qBoardCtx.font = 'bold 26px sans-serif';
+          qBoardCtx.font = '15px sans-serif';
+          qBoardCtx.fillText("Advancing pawn on the game board...", 256, 290);
+        } else {
+          const livePipA = Math.floor((now / 60) % 6) + 1;
+          const livePipB = Math.floor(((now / 75) + 3) % 6) + 1;
+          const wobbleA = Math.sin(now * 0.015) * 0.12;
+          const wobbleB = -Math.cos(now * 0.013) * 0.14;
+
+          drawStudioDie(qBoardCtx, 195, 145, 88, livePipA, '#00f0ff', wobbleA);
+          drawStudioDie(qBoardCtx, 317, 145, 88, livePipB, '#ff79b0', wobbleB);
+
+          qBoardCtx.fillStyle = '#39ff14';
+          qBoardCtx.font = 'bold 17px monospace';
           qBoardCtx.textAlign = 'center';
-          qBoardCtx.fillText("THE GOODY TONIGHT SHOW", 256, 110);
-        } else {
-          const isCurrentPlayerTurn = isSoloMode ? (activePlayer === soloPlayerId) : (activePlayer !== goodyPlayerSlot);
-         
-          if (gameState === "IN_PLAY" && (!hasPlayerRolledThisTurn || (hasPlayerRolledThisTurn && isPawnMoving && (p1RollVal !== null || p2RollVal !== null))) && isCurrentPlayerTurn) {
-            const pName = contestantNames[activePlayer];
-            const currentRolled = activePlayer === "goody-contestant-2" ? p2RollVal : p1RollVal;
+          qBoardCtx.fillText("[ TAP SCREEN TO STOP DICE ]", 256, 245);
 
-            qBoardCtx.fillStyle = '#ffda66';
-            qBoardCtx.font = 'bold 20px monospace';
-            qBoardCtx.textAlign = 'center';
-            qBoardCtx.fillText(`🎲 ${pName.toUpperCase()}'S TURN TO ROLL 🎲`, 230, 40);
-
-            if (isDiceTimerActive) {
-              qBoardCtx.fillStyle = '#ff7675';
-              qBoardCtx.font = 'bold 18px monospace';
-              qBoardCtx.textAlign = 'right';
-              qBoardCtx.fillText(`⏱️ ${diceCountdown}s`, 485, 40);
-            }
-
-            qBoardCtx.fillStyle = '#00f0ff';
-            qBoardCtx.fillRect(36, 52, 440, 2);
-
-            const now = performance.now();
-
-            if (currentRolled !== null) {
-              drawStudioDie(qBoardCtx, 256, 155, 96, currentRolled, '#39ff14', 0);
-
-              qBoardCtx.fillStyle = '#39ff14';
-              qBoardCtx.font = 'bold 24px monospace';
-              qBoardCtx.textAlign = 'center';
-              qBoardCtx.fillText(`LOCKED IN: ${currentRolled}!`, 256, 255);
-
-              qBoardCtx.fillStyle = '#ffffff';
-              qBoardCtx.font = '15px sans-serif';
-              qBoardCtx.fillText("Advancing pawn on the game board...", 256, 290);
-            } else {
-              const livePipA = Math.floor((now / 60) % 6) + 1;
-              const livePipB = Math.floor(((now / 75) + 3) % 6) + 1;
-              const wobbleA = Math.sin(now * 0.015) * 0.12;
-              const wobbleB = -Math.cos(now * 0.013) * 0.14;
-
-              drawStudioDie(qBoardCtx, 195, 145, 88, livePipA, '#00f0ff', wobbleA);
-              drawStudioDie(qBoardCtx, 317, 145, 88, livePipB, '#ff79b0', wobbleB);
-
-              qBoardCtx.fillStyle = '#39ff14';
-              qBoardCtx.font = 'bold 17px monospace';
-              qBoardCtx.textAlign = 'center';
-              qBoardCtx.fillText("[ TAP SCREEN TO STOP DICE ]", 256, 245);
-
-              qBoardCtx.fillStyle = '#ffda66';
-              qBoardCtx.font = 'bold 14px monospace';
-              qBoardCtx.fillText(`You have ${diceCountdown} seconds to roll!`, 256, 285);
-            }
-          } else {
-            const headerTxt = isSoloMode ? " SOLO RACE ACTIVE " : (isVsGoodyMode ? " GOODY HEAD-TO-HEAD BATTLE " : " OFFICIAL GAME RULES ");
-            qBoardCtx.fillStyle = '#ffda66';
-            qBoardCtx.font = 'bold 22px sans-serif';
-            qBoardCtx.textAlign = 'center';
-            qBoardCtx.fillText(headerTxt, 256, 45);
-
-            qBoardCtx.fillStyle = '#00f0ff';
-            qBoardCtx.fillRect(36, 58, 440, 2);
-
-            const rules = [
-              " 1. Tap the studio screen to roll your dice.",
-              " 2. Land on tiles to trigger country trivia.",
-              " 3. You have 30 seconds to answer questions.",
-              " 4. Correct answer secures your position.",
-              " 5. Incorrect answer sends you back to START!",
-              " 6. Reach tile 32 before 20:00 to WIN!"
-            ];
-
-            qBoardCtx.font = '13px monospace';
-            qBoardCtx.textAlign = 'left';
-            rules.forEach((rule, idx) => {
-              qBoardCtx.fillStyle = idx % 2 === 0 ? '#ffffff' : '#ebdcf9';
-              qBoardCtx.fillText(rule, 26, 85 + (idx * 24));
-            });
-
-            qBoardCtx.fillStyle = '#39ff14';
-            qBoardCtx.font = 'bold 14px monospace';
-            qBoardCtx.textAlign = 'center';
-            qBoardCtx.fillText(" LIVE BROADCAST IN PROGRESS", 256, 250);
-          }
+          qBoardCtx.fillStyle = '#ffda66';
+          qBoardCtx.font = 'bold 14px monospace';
+          qBoardCtx.fillText(`You have ${diceCountdown} seconds to roll!`, 256, 285);
         }
-      }
-      qBoardTex.needsUpdate = true;
-    }
-    renderStageQuestionBoard();
+      } else {
+        const headerTxt = isSoloMode ? " SOLO RACE ACTIVE " : (isVsGoodyMode ? " GOODY HEAD-TO-HEAD BATTLE " : " OFFICIAL GAME RULES ");
+        qBoardCtx.fillStyle = '#ffda66';
+        qBoardCtx.font = 'bold 22px sans-serif';
+        qBoardCtx.textAlign = 'center';
+        qBoardCtx.fillText(headerTxt, 256, 45);
 
-    const qBoardMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.6, 2.7),
-      new THREE.MeshBasicMaterial({ map: qBoardTex })
-    );
-    qBoardMesh.position.set(-4.8, 3.4, -3.2);
-    qBoardMesh.rotation.y = 0.8;
-    miniDiorama.add(qBoardMesh);
+        qBoardCtx.fillStyle = '#00f0ff';
+        qBoardCtx.fillRect(36, 58, 440, 2);
 
-    const screenClickMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.6, 2.7),
-      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 })
-    );
-    screenClickMesh.position.copy(qBoardMesh.position);
-    screenClickMesh.rotation.copy(qBoardMesh.rotation);
-    screenClickMesh.userData = { clickableType: 'QUESTION_BOARD' };
-    miniDiorama.add(screenClickMesh);
+        const rules = [
+          " 1. Tap the studio screen to roll your dice.",
+          " 2. Land on tiles to trigger country trivia.",
+          " 3. You have 30 seconds to answer questions.",
+          " 4. Correct answer secures your position.",
+          " 5. Incorrect answer sends you back to START!",
+          " 6. Reach tile 32 before 20:00 to WIN!"
+        ];
 
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
+        qBoardCtx.font = '13px monospace';
+        qBoardCtx.textAlign = 'left';
+        rules.forEach((rule, idx) => {
+          qBoardCtx.fillStyle = idx % 2 === 0 ? '#ffffff' : '#ebdcf9';
+          qBoardCtx.fillText(rule, 26, 85 + (idx * 24));
+        });
 
-    function triggerRollAction() {
-      if (gameState === "OPENING_DUEL") {
-        if (isSoloMode) {
-          if (p1RollVal === null) handlePlayerRoll("goody-contestant-1", contestantNames["goody-contestant-1"], Math.floor(Math.random() * 6) + 1);
-        } else {
-          if (p1RollVal === null) handlePlayerRoll("goody-contestant-1", contestantNames["goody-contestant-1"], Math.floor(Math.random() * 6) + 1);
-          if (p2RollVal === null) handlePlayerRoll("goody-contestant-2", contestantNames["goody-contestant-2"], Math.floor(Math.random() * 6) + 1);
-        }
-      } else if (gameState === "IN_PLAY") {
-        const isAllowedPlayer = isSoloMode ? (activePlayer === soloPlayerId) : (activePlayer !== goodyPlayerSlot);
-        if (!hasPlayerRolledThisTurn && isAllowedPlayer && !isPawnMoving && !activeQuestion && !activeRecap) {
-          const rollVal = Math.floor(Math.random() * 6) + 1;
-          handlePlayerRoll(activePlayer, contestantNames[activePlayer], rollVal);
-        }
+        qBoardCtx.fillStyle = '#39ff14';
+        qBoardCtx.font = 'bold 14px monospace';
+        qBoardCtx.textAlign = 'center';
+        qBoardCtx.fillText(" LIVE BROADCAST IN PROGRESS", 256, 250);
       }
     }
+  }
+  qBoardTex.needsUpdate = true;
+}
+renderStageQuestionBoard();
 
-    function handleScreenTap(clientX, clientY) {
-      if (!isHostAuthorized) return;
-      initAudio();
+const qBoardMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(3.6, 2.7),
+  new THREE.MeshBasicMaterial({ map: qBoardTex })
+);
+qBoardMesh.position.set(-4.8, 3.4, -3.2);
+qBoardMesh.rotation.y = 0.8;
+miniDiorama.add(qBoardMesh);
 
-      mouse.x = (clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+const screenClickMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(3.6, 2.7),
+  new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 })
+);
+screenClickMesh.position.copy(qBoardMesh.position);
+screenClickMesh.rotation.copy(qBoardMesh.rotation);
+screenClickMesh.userData = { clickableType: 'QUESTION_BOARD' };
+miniDiorama.add(screenClickMesh);
 
-      raycaster.setFromCamera(mouse, camera);
-      const interactiveTargets = [screenClickMesh, qBoardMesh, studioBackScreenMesh];
-      const intersects = raycaster.intersectObjects(interactiveTargets, false);
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
 
-      if (intersects.length > 0) {
-        const hit = intersects[0];
+function triggerRollAction() {
+  if (!isLocalHost) {
+    if (socket && socket.connected) {
+      socket.emit('client_action', { type: 'ROLL_DICE' });
+    }
+    return;
+  }
+  if (gameState === "OPENING_DUEL") {
+    if (isSoloMode) {
+      if (p1RollVal === null) handlePlayerRoll("goody-contestant-1", contestantNames["goody-contestant-1"], Math.floor(Math.random() * 6) + 1);
+    } else {
+      if (p1RollVal === null) handlePlayerRoll("goody-contestant-1", contestantNames["goody-contestant-1"], Math.floor(Math.random() * 6) + 1);
+      if (p2RollVal === null) handlePlayerRoll("goody-contestant-2", contestantNames["goody-contestant-2"], Math.floor(Math.random() * 6) + 1);
+    }
+  } else if (gameState === "IN_PLAY") {
+    const isAllowedPlayer = isSoloMode ? (activePlayer === soloPlayerId) : (activePlayer !== goodyPlayerSlot);
+    if (!hasPlayerRolledThisTurn && isAllowedPlayer && !isPawnMoving && !activeQuestion && !activeRecap) {
+      const rollVal = Math.floor(Math.random() * 6) + 1;
+      handlePlayerRoll(activePlayer, contestantNames[activePlayer], rollVal);
+    }
+  }
+}
 
-        if (gameState === "MODE_PROMPT" && isLocalOnPodium1) {
-          const uv = hit.uv;
-          if (uv) {
-            if (uv.y > 0.60) chooseHostGameMode("SOLO");
-            else if (uv.y > 0.40) chooseHostGameMode("GOODY");
-            else chooseHostGameMode("TWOPLAYER");
-          } else {
-            chooseHostGameMode("SOLO");
+function handleScreenTap(clientX, clientY) {
+  if (!isHostAuthorized) return;
+  initAudio();
+
+  mouse.x = (clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const interactiveTargets = [screenClickMesh, qBoardMesh, studioBackScreenMesh];
+  const intersects = raycaster.intersectObjects(interactiveTargets, false);
+
+  if (intersects.length > 0) {
+    const hit = intersects[0];
+
+    if (gameState === "MODE_PROMPT" && isLocalOnPodium1) {
+      const uv = hit.uv;
+      let selectedMode = "SOLO";
+      if (uv) {
+        if (uv.y > 0.60) selectedMode = "SOLO";
+        else if (uv.y > 0.40) selectedMode = "GOODY";
+        else selectedMode = "TWOPLAYER";
+      }
+      chooseHostGameMode(selectedMode);
+      return;
+    }
+
+    if (activeQuestion) {
+      const uv = hit.uv;
+      if (uv && uv.y < 0.5) {
+        const optIdx = Math.floor((0.5 - uv.y) / 0.12);
+        if (optIdx >= 0 && optIdx < activeQuestion.options.length) {
+          if (!isLocalHost) {
+            if (socket && socket.connected) {
+              socket.emit('client_action', { type: 'ANSWER_QUESTION', optionIndex: optIdx });
+            }
+            return;
           }
+          const chosenOpt = activeQuestion.options[optIdx];
+          stageSelectedOption = chosenOpt;
+          stageOptionStatus = 'selected';
+          renderStageQuestionBoard();
+          pushAuthoritativeState();
+
+          setTimeout(() => {
+            evaluateAnswer(activePlayer, chosenOpt);
+          }, 800);
           return;
         }
-
-        if (activeQuestion) {
-          const uv = hit.uv;
-          if (uv && uv.y < 0.5) {
-            const optIdx = Math.floor((0.5 - uv.y) / 0.12);
-            if (optIdx >= 0 && optIdx < activeQuestion.options.length) {
-              const chosenOpt = activeQuestion.options[optIdx];
-              stageSelectedOption = chosenOpt;
-              stageOptionStatus = 'selected';
-              renderStageQuestionBoard();
-
-              setTimeout(() => {
-                evaluateAnswer(activePlayer, chosenOpt);
-              }, 800);
-              return;
-            }
-          }
-        }
-
-        triggerRollAction();
       }
     }
 
-    window.addEventListener('pointerup', (e) => {
-      handleScreenTap(e.clientX, e.clientY);
-    });
+    triggerRollAction();
+  }
+}
 
-    const moveState = { forward: false, backward: false, turnLeft: false, turnRight: false };
-    const plushiePosition = new THREE.Vector3(-1.6, 0.44, -1.2);
-    const plushieRotation = { yaw: 0 };
+window.addEventListener('pointerup', (e) => {
+  if (e.target && e.target.closest && e.target.closest('#mobile-controls')) return;
+  handleScreenTap(e.clientX, e.clientY);
+});
 
-    function createCutePlushie(color) {
-      const pGroup = new THREE.Group();
-      const pMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.95 });
-      const pBody = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 14), pMat); pBody.position.y = 0.28; pGroup.add(pBody);
-      const pHead = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 14), pMat); pHead.position.y = 0.58; pGroup.add(pHead);
-      const ear1 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), pMat); ear1.position.set(-0.14, 0.74, 0);
-      const ear2 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), pMat); ear2.position.set(0.14, 0.74, 0); pGroup.add(ear1, ear2);
-      const blushMat = new THREE.MeshBasicMaterial({ color: 0xff69b4 });
-      const blush1 = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), blushMat); blush1.position.set(-0.11, 0.54, 0.17);
-      const blush2 = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), blushMat); blush2.position.set(0.11, 0.54, 0.17); pGroup.add(blush1, blush2);
-      const eyeBlackMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-      const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), eyeBlackMat); eyeL.position.set(-0.07, 0.60, 0.19);
-      const shineL = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), eyeWhiteMat); shineL.position.set(-0.08, 0.612, 0.21); pGroup.add(eyeL, shineL);
-      const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), eyeBlackMat); eyeR.position.set(0.07, 0.60, 0.19);
-      const shineR = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), eyeWhiteMat); shineR.position.set(0.06, 0.612, 0.21); pGroup.add(eyeR, shineR);
-      const snout = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 8), new THREE.MeshStandardMaterial({ color: 0xff8fab, roughness: 0.6 }));
-      snout.scale.set(1.2, 0.8, 1); snout.position.set(0, 0.56, 0.21); pGroup.add(snout);
-      const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 4, 8, Math.PI), new THREE.MeshBasicMaterial({ color: 0x222222 }));
-      mouth.position.set(0, 0.525, 0.21); mouth.rotation.x = Math.PI * 0.1; pGroup.add(mouth);
-      return pGroup;
-    }
+// Mobile Crosshair Fire Button (taps exact center of screen where crosshair sits)
+const mobileActionBtn = document.getElementById('mobile-action-btn');
+if (mobileActionBtn) {
+  mobileActionBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    handleScreenTap(window.innerWidth / 2, window.innerHeight / 2);
+  });
+}
 
-    function setPlushieVisualMode(group, mode) {
-      if (!group) return;
-      if (mode === 'invisible') {
-        group.visible = false;
-        return;
-      }
-      group.visible = true;
-      const isOpaque = (mode === 'opaque');
-      group.traverse(child => {
-        if (child.isMesh && child.material) {
-          const mats = Array.isArray(child.material) ? child.material : [child.material];
-          mats.forEach(m => {
-            if (isOpaque) {
-              m.transparent = false;
-              m.opacity = 1.0;
-              m.depthWrite = true;
-            } else {
-              m.transparent = true;
-              m.opacity = 0.45;
-              m.depthWrite = false;
-            }
-            m.needsUpdate = true;
-          });
+const moveState = { forward: false, backward: false, turnLeft: false, turnRight: false };
+const plushiePosition = new THREE.Vector3(-1.6, 0.44, -1.2);
+const plushieRotation = { yaw: 0 };
+
+// Bind Mobile Touch D-Pad Controls
+function bindMobileHoldButton(btnId, stateKey) {
+  const el = document.getElementById(btnId);
+  if (!el) return;
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    initAudio();
+    moveState[stateKey] = true;
+  });
+  const release = (e) => {
+    e.preventDefault();
+    moveState[stateKey] = false;
+  };
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointerleave', release);
+  el.addEventListener('pointercancel', release);
+}
+bindMobileHoldButton('btn-m-fwd', 'forward');
+bindMobileHoldButton('btn-m-back', 'backward');
+bindMobileHoldButton('btn-m-left', 'turnLeft');
+bindMobileHoldButton('btn-m-right', 'turnRight');
+
+function createCutePlushie(color) {
+  const pGroup = new THREE.Group();
+  const pMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.95 });
+  const pBody = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 14), pMat); pBody.position.y = 0.28; pGroup.add(pBody);
+  const pHead = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 14), pMat); pHead.position.y = 0.58; pGroup.add(pHead);
+  const ear1 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), pMat); ear1.position.set(-0.14, 0.74, 0);
+  const ear2 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), pMat); ear2.position.set(0.14, 0.74, 0); pGroup.add(ear1, ear2);
+  const blushMat = new THREE.MeshBasicMaterial({ color: 0xff69b4 });
+  const blush1 = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), blushMat); blush1.position.set(-0.11, 0.54, 0.17);
+  const blush2 = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), blushMat); blush2.position.set(0.11, 0.54, 0.17); pGroup.add(blush1, blush2);
+  const eyeBlackMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+  const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), eyeBlackMat); eyeL.position.set(-0.07, 0.60, 0.19);
+  const shineL = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), eyeWhiteMat); shineL.position.set(-0.08, 0.612, 0.21); pGroup.add(eyeL, shineL);
+  const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), eyeBlackMat); eyeR.position.set(0.07, 0.60, 0.19);
+  const shineR = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), eyeWhiteMat); shineR.position.set(0.06, 0.612, 0.21); pGroup.add(eyeR, shineR);
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 8), new THREE.MeshStandardMaterial({ color: 0xff8fab, roughness: 0.6 }));
+  snout.scale.set(1.2, 0.8, 1); snout.position.set(0, 0.56, 0.21); pGroup.add(snout);
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 4, 8, Math.PI), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+  mouth.position.set(0, 0.525, 0.21); mouth.rotation.x = Math.PI * 0.1; pGroup.add(mouth);
+  return pGroup;
+}
+
+function setPlushieVisualMode(group, mode) {
+  if (!group) return;
+  if (mode === 'invisible') {
+    group.visible = false;
+    return;
+  }
+  group.visible = true;
+  const isOpaque = (mode === 'opaque');
+  group.traverse(child => {
+    if (child.isMesh && child.material) {
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      mats.forEach(m => {
+        if (isOpaque) {
+          m.transparent = false;
+          m.opacity = 1.0;
+          m.depthWrite = true;
+        } else {
+          m.transparent = true;
+          m.opacity = 0.45;
+          m.depthWrite = false;
         }
+        m.needsUpdate = true;
       });
     }
+  });
+}
 
-    const localPlushie = createCutePlushie(0x00f0ff);
-    localPlushie.position.copy(plushiePosition);
-    miniDiorama.add(localPlushie);
-    setPlushieVisualMode(localPlushie, 'transparent');
+const localPlushie = createCutePlushie(0x00f0ff);
+localPlushie.position.copy(plushiePosition);
+miniDiorama.add(localPlushie);
+setPlushieVisualMode(localPlushie, 'transparent');
 
-    document.addEventListener('keydown', (e) => {
-      if (!isHostAuthorized) return;
-      if (e.code === 'KeyW') moveState.forward = true;
-      if (e.code === 'KeyS') moveState.backward = true;
-      if (e.code === 'KeyA') moveState.turnLeft = true;
-      if (e.code === 'KeyD') moveState.turnRight = true;
+document.addEventListener('keydown', (e) => {
+  if (!isHostAuthorized) return;
+  if (e.code === 'KeyW' || e.code === 'ArrowUp') moveState.forward = true;
+  if (e.code === 'KeyS' || e.code === 'ArrowDown') moveState.backward = true;
+  if (e.code === 'KeyA' || e.code === 'ArrowLeft') moveState.turnLeft = true;
+  if (e.code === 'KeyD' || e.code === 'ArrowRight') moveState.turnRight = true;
 
-      if (gameState === "MODE_PROMPT" && isLocalOnPodium1) {
-        if (e.key === '1') chooseHostGameMode("SOLO");
-        if (e.key === '2') chooseHostGameMode("GOODY");
-        if (e.key === '3') chooseHostGameMode("TWOPLAYER");
-      }
-    });
+  if (gameState === "MODE_PROMPT" && isLocalOnPodium1) {
+    if (e.key === '1') chooseHostGameMode("SOLO");
+    if (e.key === '2') chooseHostGameMode("GOODY");
+    if (e.key === '3') chooseHostGameMode("TWOPLAYER");
+  }
+});
 
-    document.addEventListener('keyup', (e) => {
-      if (!isHostAuthorized) return;
-      if (e.code === 'KeyW') moveState.forward = false;
-      if (e.code === 'KeyS') moveState.backward = false;
-      if (e.code === 'KeyA') moveState.turnLeft = false;
-      if (e.code === 'KeyD') moveState.turnRight = false;
-    });
+document.addEventListener('keyup', (e) => {
+  if (!isHostAuthorized) return;
+  if (e.code === 'KeyW' || e.code === 'ArrowUp') moveState.forward = false;
+  if (e.code === 'KeyS' || e.code === 'ArrowDown') moveState.backward = false;
+  if (e.code === 'KeyA' || e.code === 'ArrowLeft') moveState.turnLeft = false;
+  if (e.code === 'KeyD' || e.code === 'ArrowRight') moveState.turnRight = false;
+});
 
-    const miniAudience = new THREE.Group();
-    const plushColors = [0xff7675, 0x74b9ff, 0xa29bfe, 0xffbe76, 0x55efc4, 0xfd79a8, 0xf6e58d, 0x48dbfb, 0xff9ff3];
-    let playerPlushie1 = null;
-    let playerPlushie2 = null;
+const miniAudience = new THREE.Group();
+const plushColors = [0xff7675, 0x74b9ff, 0xa29bfe, 0xffbe76, 0x55efc4, 0xfd79a8, 0xf6e58d, 0x48dbfb, 0xff9ff3];
+let playerPlushie1 = null;
+let playerPlushie2 = null;
 
-    [5.7, 6.4].forEach((radius, rowIdx) => {
-      const count = rowIdx === 0 ? 14 : 18;
-      for (let i = 0; i < count; i++) {
-        const theta = -Math.PI * 0.65 + (i / (count - 1)) * (Math.PI * 1.30);
-        const col = plushColors[(i + rowIdx * 3) % plushColors.length];
-        const pGroup = createCutePlushie(col);
+[5.7, 6.4].forEach((radius, rowIdx) => {
+  const count = rowIdx === 0 ? 14 : 18;
+  for (let i = 0; i < count; i++) {
+    const theta = -Math.PI * 0.65 + (i / (count - 1)) * (Math.PI * 1.30);
+    const col = plushColors[(i + rowIdx * 3) % plushColors.length];
+    const pGroup = createCutePlushie(col);
 
-        const px = Math.sin(theta) * radius;
-        const pz = Math.cos(theta) * (radius * 0.95) + 0.8;
-        pGroup.position.set(px, 0.46 + rowIdx * 0.25, pz);
-        pGroup.lookAt(0, 1.8, -2.6);
-        pGroup.userData = {
-          initialY: pGroup.position.y,
-          phase: Math.random() * Math.PI * 2,
-          theta: theta,
-          radius: radius,
-          isAudienceSeat: true
-        };
-        miniDiorama.add(pGroup);
+    const px = Math.sin(theta) * radius;
+    const pz = Math.cos(theta) * (radius * 0.95) + 0.8;
+    pGroup.position.set(px, 0.46 + rowIdx * 0.25, pz);
+    pGroup.lookAt(0, 1.8, -2.6);
+    pGroup.userData = {
+      initialY: pGroup.position.y,
+      phase: Math.random() * Math.PI * 2,
+      theta: theta,
+      radius: radius,
+      isAudienceSeat: true
+    };
+    miniDiorama.add(pGroup);
 
-        if (rowIdx === 0 && i === 4) playerPlushie1 = pGroup;
-        if (rowIdx === 0 && i === 9) playerPlushie2 = pGroup;
-      }
-    });
-    miniDiorama.add(miniAudience);
+    if (rowIdx === 0 && i === 4) playerPlushie1 = pGroup;
+    if (rowIdx === 0 && i === 9) playerPlushie2 = pGroup;
+  }
+});
+miniDiorama.add(miniAudience);
 
-    function handlePlushieMovement(contestant, direction) {
-      const targetPlushie = contestant === "goody-contestant-2" ? playerPlushie2 : playerPlushie1;
-      if (!targetPlushie) return;
+function handlePlushieMovement(contestant, direction) {
+  const targetPlushie = contestant === "goody-contestant-2" ? playerPlushie2 : playerPlushie1;
+  if (!targetPlushie) return;
 
-      const rot = contestantRotations[contestant] ? contestantRotations[contestant].yaw : 0;
-      const step = 0.35;
+  const rot = contestantRotations[contestant] ? contestantRotations[contestant].yaw : 0;
+  const step = 0.35;
 
-      const fwdX = -Math.sin(rot);
-      const fwdZ = -Math.cos(rot);
-      const rightX = Math.cos(rot);
-      const rightZ = -Math.sin(rot);
+  const fwdX = -Math.sin(rot);
+  const fwdZ = -Math.cos(rot);
+  const rightX = Math.cos(rot);
+  const rightZ = -Math.sin(rot);
 
-      if (direction === 'FORWARD') {
-        targetPlushie.position.x += fwdX * step;
-        targetPlushie.position.z += fwdZ * step;
-      }
-      if (direction === 'BACK') {
-        targetPlushie.position.x -= fwdX * step;
-        targetPlushie.position.z -= fwdZ * step;
-      }
-      if (direction === 'LEFT') {
-        targetPlushie.position.x -= rightX * step;
-        targetPlushie.position.z -= rightZ * step;
-      }
-      if (direction === 'RIGHT') {
-        targetPlushie.position.x += rightX * step;
-        targetPlushie.position.z += rightZ * step;
-      }
+  if (direction === 'FORWARD') {
+    targetPlushie.position.x += fwdX * step;
+    targetPlushie.position.z += fwdZ * step;
+  }
+  if (direction === 'BACK') {
+    targetPlushie.position.x -= fwdX * step;
+    targetPlushie.position.z -= fwdZ * step;
+  }
+  if (direction === 'LEFT') {
+    targetPlushie.position.x -= rightX * step;
+    targetPlushie.position.z -= rightZ * step;
+  }
+  if (direction === 'RIGHT') {
+    targetPlushie.position.x += rightX * step;
+    targetPlushie.position.z += rightZ * step;
+  }
 
-      targetPlushie.position.x = Math.max(-6.8, Math.min(6.8, targetPlushie.position.x));
-      targetPlushie.position.z = Math.max(-6.8, Math.min(6.8, targetPlushie.position.z));
-      targetPlushie.position.y = 0.46;
+  targetPlushie.position.x = Math.max(-6.8, Math.min(6.8, targetPlushie.position.x));
+  targetPlushie.position.z = Math.max(-6.8, Math.min(6.8, targetPlushie.position.z));
+  targetPlushie.position.y = 0.46;
+}
+
+function drawDiceFace(ctx, x, y, size, value) {
+  drawStudioDie(ctx, x + size / 2, y + size / 2, size, value, '#ff79b0');
+}
+
+const studioScreenCanvas = document.createElement('canvas'); studioScreenCanvas.width = 512; studioScreenCanvas.height = 256;
+const sScreenCtx = studioScreenCanvas.getContext('2d');
+const studioScreenTex = new THREE.CanvasTexture(studioScreenCanvas);
+
+function drawScreenFeed(ctx, x, y, width, height, name, city, isLive, videoElem, isGuy, currentRoll, isRolling, isGoodyHostSlot) {
+  ctx.fillStyle = '#05020a'; ctx.fillRect(x, y, width, height);
+  ctx.strokeStyle = isGoodyHostSlot ? '#a29bfe' : (isLive ? '#39ff14' : '#ffb300');
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x, y, width, height);
+
+  if (isGoodyHostSlot) {
+    ctx.fillStyle = '#16082b';
+    ctx.fillRect(x + 2, y + 2, width - 4, height - 4);
+
+    const cx = x + width / 2;
+    const cy = y + height * 0.45;
+
+    ctx.fillStyle = '#cccccc';
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(cx - 40, cy - 35, 80, 70);
+
+    ctx.strokeStyle = '#39ff14';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx - 24, cy - 10);
+    ctx.lineTo(cx - 14, cy - 22);
+    ctx.lineTo(cx - 4, cy - 10);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(cx + 4, cy - 10);
+    ctx.lineTo(cx + 14, cy - 22);
+    ctx.lineTo(cx + 24, cy - 10);
+    ctx.stroke();
+
+    if (isGoodySpeaking) {
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 15, 16, 8, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(cx, cy + 10, 12, 0.2, Math.PI - 0.2, false);
+      ctx.stroke();
+    }
+  } else if (isLive && videoElem.readyState >= 2) {
+    ctx.save(); ctx.drawImage(videoElem, x + 2, y + 2, width - 4, height - 4); ctx.restore();
+  } else {
+    ctx.fillStyle = isGuy ? '#1b2a47' : '#3d1b38'; ctx.fillRect(x + 2, y + 2, width - 4, height - 4);
+    const cx = x + width / 2; const cy = y + height * 0.58;
+    ctx.fillStyle = isGuy ? '#4a69bd' : '#e84393'; ctx.beginPath(); ctx.ellipse(cx, cy + 25, 26, 32, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f8c291'; ctx.beginPath(); ctx.arc(cx, cy - 10, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(cx - 5, cy - 10, 2, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(cx + 5, cy - 10, 2, 0, Math.PI * 2); ctx.fill();
+  }
+
+  const diceSize = 42;
+  const diceX = x + width - diceSize - 12;
+  const diceY = y + 12;
+
+  if (isRolling) {
+    const animVal = Math.floor((performance.now() / 80) % 6) + 1;
+    drawDiceFace(ctx, diceX, diceY, diceSize, animVal);
+  } else if (currentRoll !== null) {
+    drawDiceFace(ctx, diceX, diceY, diceSize, currentRoll);
+  }
+
+  ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(x, y + height - 26, width, 26);
+  ctx.fillStyle = isGoodyHostSlot ? '#00f0ff' : (isLive ? '#39ff14' : '#ffda66');
+  ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center';
+
+  const tag = isGoodyHostSlot
+    ? `[AI HOST: GOODY]`
+    : `${isLive ? ' LIVE ' : ' CALL'} ${name.toUpperCase()} [${city.toUpperCase()}]`;
+
+  ctx.fillText(tag, x + width/2, y + height - 8);
+}
+
+function renderBackstageScreens() {
+  sScreenCtx.fillStyle = '#060210'; sScreenCtx.fillRect(0, 0, 512, 256);
+  if (studioPower) {
+    const isP1Goody = isVsGoodyMode && goodyPlayerSlot === "goody-contestant-1";
+    const isP2Goody = isVsGoodyMode && goodyPlayerSlot === "goody-contestant-2";
+
+    if (isSoloMode) {
+      sScreenCtx.fillStyle = '#030108';
+      sScreenCtx.fillRect(15, 20, 225, 215);
+      sScreenCtx.strokeStyle = '#441111';
+      sScreenCtx.lineWidth = 3;
+      sScreenCtx.strokeRect(15, 20, 225, 215);
+
+      sScreenCtx.fillStyle = '#ff7675';
+      sScreenCtx.font = 'bold 16px sans-serif';
+      sScreenCtx.textAlign = 'center';
+      sScreenCtx.fillText("GOODY MODE", 127, 105);
+
+      sScreenCtx.fillStyle = '#ffda66';
+      sScreenCtx.font = 'bold 12px monospace';
+      sScreenCtx.fillText("1 PLAYER SOLO MODE", 127, 135);
+    } else {
+      drawScreenFeed(sScreenCtx, 15, 20, 225, 215, contestantNames["goody-contestant-1"], contestantCities["goody-contestant-1"], hasLivePlayer1Stream, videoPlayer1, true, p1RollVal, isDiceRollingP1, isP1Goody);
     }
 
-    function drawDiceFace(ctx, x, y, size, value) {
-      drawStudioDie(ctx, x + size / 2, y + size / 2, size, value, '#ff79b0');
+    if (isSoloMode) {
+      sScreenCtx.fillStyle = '#030108';
+      sScreenCtx.fillRect(272, 20, 225, 215);
+      sScreenCtx.strokeStyle = '#441111';
+      sScreenCtx.lineWidth = 3;
+      sScreenCtx.strokeRect(272, 20, 225, 215);
+
+      sScreenCtx.fillStyle = '#ff7675';
+      sScreenCtx.font = 'bold 18px sans-serif';
+      sScreenCtx.textAlign = 'center';
+      sScreenCtx.fillText("POWER OFF", 384, 105);
+
+      sScreenCtx.fillStyle = '#ffda66';
+      sScreenCtx.font = 'bold 13px monospace';
+      sScreenCtx.fillText("1 PLAYER SOLO MODE", 384, 135);
+    } else {
+      drawScreenFeed(sScreenCtx, 272, 20, 225, 215, contestantNames["goody-contestant-2"], contestantCities["goody-contestant-2"], hasLivePlayer2Stream, videoPlayer2, false, p2RollVal, isDiceRollingP2, isP2Goody);
+    }
+  }
+  studioScreenTex.needsUpdate = true;
+}
+
+const studioBackScreenMesh = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 2.8), new THREE.MeshBasicMaterial({ map: studioScreenTex }));
+studioBackScreenMesh.position.set(0, 3.4, -4.5); miniDiorama.add(studioBackScreenMesh);
+
+const miniGoody = new THREE.Group();
+const silverMetalMat = new THREE.MeshStandardMaterial({
+  color: 0xcccccc, metalness: 0.95, roughness: 0.15
+});
+
+const gPodium = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.6, 20), new THREE.MeshStandardMaterial({ color: 0x2b154a }));
+gPodium.position.y = 0.74; miniGoody.add(gPodium);
+
+const podiumTrim = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.05, 20), silverMetalMat);
+podiumTrim.position.y = 1.02; miniGoody.add(podiumTrim);
+
+const gBody = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.4), silverMetalMat);
+gBody.position.y = 1.34; miniGoody.add(gBody);
+const gHead = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.35, 0.35), silverMetalMat);
+gHead.position.y = 1.82; miniGoody.add(gHead);
+const gAntennaStem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.22, 8), silverMetalMat);
+gAntennaStem.position.y = 2.08; miniGoody.add(gAntennaStem);
+const gAntOrb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+gAntOrb.position.y = 2.20; miniGoody.add(gAntOrb);
+
+const faceCanvas = document.createElement('canvas'); faceCanvas.width = 128; faceCanvas.height = 128;
+const fctx = faceCanvas.getContext('2d'); fctx.fillStyle = '#00'; fctx.fillRect(0, 0, 128, 128);
+const faceTex = new THREE.CanvasTexture(faceCanvas);
+const gFace = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.25), new THREE.MeshBasicMaterial({ map: faceTex }));
+gFace.position.set(0, 1.82, 0.19); miniGoody.add(gFace);
+
+miniGoody.position.set(0, 0, -2.6);
+miniDiorama.add(miniGoody);
+
+function renderGoodyFace(time) {
+  fctx.fillStyle = '#030108';
+  fctx.fillRect(0, 0, 128, 128);
+
+  if (!studioPower) {
+    gAntOrb.material.color.setHex(0x111111);
+    faceTex.needsUpdate = true;
+    return;
+  }
+
+  gAntOrb.material.color.setHex(isGoodySpeaking ? 0x00f0ff : 0x39ff14);
+
+  fctx.fillStyle = '#39ff14'; fctx.strokeStyle = '#39ff14'; fctx.lineWidth = 4;
+  fctx.lineCap = 'round'; fctx.lineJoin = 'round';
+
+  fctx.beginPath();
+  fctx.moveTo(28, 56); fctx.lineTo(44, 38); fctx.lineTo(60, 56); fctx.stroke();
+  fctx.beginPath();
+  fctx.moveTo(68, 56); fctx.lineTo(84, 38); fctx.lineTo(100, 56); fctx.stroke();
+
+  if (isGoodySpeaking) {
+    const mouthOpen = (Math.sin(time * 0.022) + 1.0) * 0.5;
+    const mouthHeight = 6 + (mouthOpen * 20);
+    const mouthWidth = 40 + (mouthOpen * 6);
+
+    fctx.fillStyle = '#220033'; fctx.strokeStyle = '#39ff14'; fctx.lineWidth = 3.5;
+    fctx.beginPath();
+    fctx.ellipse(64, 88, mouthWidth / 2, mouthHeight / 2, 0, 0, Math.PI * 2);
+    fctx.fill(); fctx.stroke();
+
+    fctx.fillStyle = '#ffffff';
+    fctx.fillRect(54, 88 - (mouthHeight / 2) + 2, 20, Math.min(5, mouthHeight / 2));
+  } else {
+    fctx.strokeStyle = '#39ff14'; fctx.lineWidth = 5;
+    fctx.beginPath();
+    fctx.arc(64, 78, 16, 0.2, Math.PI - 0.2, false);
+    fctx.stroke();
+  }
+
+  faceTex.needsUpdate = true;
+}
+
+function createStudioRoboticCamera(x, z) {
+  const camRig = new THREE.Group(); camRig.position.set(x, 0.44, z);
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x1f1f26 });
+  const basePlate = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.42, 0.08, 16), darkMat); basePlate.position.y = 0.04; camRig.add(basePlate);
+  const outerCol = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.13, 0.55, 16), darkMat); outerCol.position.y = 0.35; camRig.add(outerCol);
+  const headPivot = new THREE.Group(); headPivot.position.y = 1.0;
+  const cameraBox = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.24, 0.42), darkMat); headPivot.add(cameraBox);
+  const lensBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.095, 0.26, 16), new THREE.MeshStandardMaterial({ color: 0x0a0a0a }));
+  lensBarrel.rotation.x = Math.PI / 2; lensBarrel.position.set(0, 0, -0.24); headPivot.add(lensBarrel);
+  const frontGlass = new THREE.Mesh(new THREE.CircleGeometry(0.08, 16), new THREE.MeshBasicMaterial({ color: 0x00f0ff }));
+  frontGlass.position.set(0, 0, -0.431); headPivot.add(frontGlass);
+  const tallyLamp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+  tallyLamp.position.set(0, 0.15, -0.28); headPivot.add(tallyLamp);
+  camRig.add(headPivot); miniDiorama.add(camRig);
+  return { headPivot, tallyLamp, frontGlass };
+}
+const autoCam1 = createStudioRoboticCamera(-2.4, 0.3);
+const autoCam2 = createStudioRoboticCamera(2.4, 0.3);
+
+function updateCameraAlignment() {
+  const hostHeadPos = new THREE.Vector3(0, 5.77, -11.6);
+  if (studioPower) {
+    autoCam1.headPivot.lookAt(hostHeadPos); autoCam2.headPivot.lookAt(hostHeadPos);
+    autoCam1.headPivot.rotation.y += Math.PI; autoCam2.headPivot.rotation.y += Math.PI;
+    autoCam1.tallyLamp.material.color.setHex(0xff0000); autoCam2.tallyLamp.material.color.setHex(0xff0000);
+  } else {
+    autoCam1.headPivot.rotation.set(0.6, 0.2, 0); autoCam2.headPivot.rotation.set(0.6, -0.2, 0);
+    autoCam1.tallyLamp.material.color.setHex(0x111111); autoCam2.tallyLamp.material.color.setHex(0x111111);
+  }
+}
+scene.add(miniDiorama);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+let prevTime = performance.now();
+function animate() {
+  requestAnimationFrame(animate);
+  const time = performance.now();
+  const delta = Math.min((time - prevTime) / 1000, 0.1);
+
+  renderBackstageScreens();
+  renderGoodyFace(time);
+
+  const isPlayerTurnRoll = gameState === "IN_PLAY" && !hasPlayerRolledThisTurn && (isSoloMode ? activePlayer === soloPlayerId : activePlayer !== goodyPlayerSlot);
+  if (gameState === "OPENING_DUEL" || isPlayerTurnRoll) {
+    renderStageQuestionBoard();
+  }
+
+  let movedThisFrame = false;
+  if (moveState.turnLeft) {
+    plushieRotation.yaw += 2.2 * delta;
+    movedThisFrame = true;
+  }
+  if (moveState.turnRight) {
+    plushieRotation.yaw -= 2.2 * delta;
+    movedThisFrame = true;
+  }
+
+  const moveSpeed = 3.8 * delta;
+  if (moveState.forward) {
+    plushiePosition.x -= Math.sin(plushieRotation.yaw) * moveSpeed;
+    plushiePosition.z -= Math.cos(plushieRotation.yaw) * moveSpeed;
+    movedThisFrame = true;
+  }
+  if (moveState.backward) {
+    plushiePosition.x += Math.sin(plushieRotation.yaw) * moveSpeed;
+    plushiePosition.z += Math.cos(plushieRotation.yaw) * moveSpeed;
+    movedThisFrame = true;
+  }
+
+  plushiePosition.x = Math.max(-6.5, Math.min(6.5, plushiePosition.x));
+  plushiePosition.z = Math.max(-6.5, Math.min(6.5, plushiePosition.z));
+
+  const dioramaWorldPos = new THREE.Vector3(0, 3.95, -9);
+  const plushieWorldPos = plushiePosition.clone().add(dioramaWorldPos);
+
+  const p1Pos = new THREE.Vector3(-1.6, 0.44, -2.2);
+  const p2Pos = new THREE.Vector3(1.6, 0.44, -2.2);
+
+  const distP1 = plushiePosition.distanceTo(p1Pos);
+  const distP2 = plushiePosition.distanceTo(p2Pos);
+
+  if (distP1 < 0.65 || distP2 < 0.65) {
+    plushiePosition.y = 0.58;
+  } else {
+    plushiePosition.y = 0.44;
+  }
+
+  localPlushie.position.copy(plushiePosition);
+  localPlushie.rotation.y = plushieRotation.yaw + Math.PI;
+
+  if (movedThisFrame) {
+    emitLocalPlushiePosition(false);
+  }
+
+  // Smoothly interpolate all remote players' plushies across PC & Mobile
+  remotePlushies.forEach((entry) => {
+    entry.mesh.position.lerp(entry.targetPos, 0.25);
+    entry.mesh.rotation.y += (entry.targetYaw - entry.mesh.rotation.y) * 0.25;
+    if (entry.mesh.userData && entry.mesh.userData.nameTagMesh) {
+      entry.mesh.userData.nameTagMesh.quaternion.copy(camera.quaternion);
+    }
+  });
+
+  const camTargetX = plushieWorldPos.x + Math.sin(plushieRotation.yaw) * 3.2;
+  const camTargetZ = plushieWorldPos.z + Math.cos(plushieRotation.yaw) * 3.2;
+  const camTargetY = plushieWorldPos.y + 1.6;
+
+  camera.position.x += (camTargetX - camera.position.x) * 0.1;
+  camera.position.y += (camTargetY - camera.position.y) * 0.1;
+  camera.position.z += (camTargetZ - camera.position.z) * 0.1;
+
+  camera.lookAt(plushieWorldPos.x, plushieWorldPos.y + 0.6, plushieWorldPos.z);
+
+  const prevPodium1 = isLocalOnPodium1;
+  const prevPodium2 = isLocalOnPodium2;
+
+  isLocalOnPodium1 = distP1 < 0.65;
+  isLocalOnPodium2 = distP2 < 0.65;
+
+  if ((isLocalOnPodium1 !== prevPodium1) || (isLocalOnPodium2 !== prevPodium2)) {
+    if (isLocalOnPodium1 && lastPodiumClaimed !== 1 && socket && socket.connected) {
+      lastPodiumClaimed = 1;
+      socket.emit('client_action', { type: 'CLAIM_PODIUM', slot: 1 });
+    } else if (isLocalOnPodium2 && lastPodiumClaimed !== 2 && socket && socket.connected) {
+      lastPodiumClaimed = 2;
+      socket.emit('client_action', { type: 'CLAIM_PODIUM', slot: 2 });
     }
 
-    const studioScreenCanvas = document.createElement('canvas'); studioScreenCanvas.width = 512; studioScreenCanvas.height = 256;
-    const sScreenCtx = studioScreenCanvas.getContext('2d');
-    const studioScreenTex = new THREE.CanvasTexture(studioScreenCanvas);
-
-    function drawScreenFeed(ctx, x, y, width, height, name, city, isLive, videoElem, isGuy, currentRoll, isRolling, isGoodyHostSlot) {
-      ctx.fillStyle = '#05020a'; ctx.fillRect(x, y, width, height);
-      ctx.strokeStyle = isGoodyHostSlot ? '#a29bfe' : (isLive ? '#39ff14' : '#ffb300');
-      ctx.lineWidth = 3;
-      ctx.strokeRect(x, y, width, height);
-
-      if (isGoodyHostSlot) {
-        ctx.fillStyle = '#16082b';
-        ctx.fillRect(x + 2, y + 2, width - 4, height - 4);
-
-        const cx = x + width / 2;
-        const cy = y + height * 0.45;
-
-        ctx.fillStyle = '#cccccc';
-        ctx.strokeStyle = '#00f0ff';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(cx - 40, cy - 35, 80, 70);
-
-        ctx.strokeStyle = '#39ff14';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(cx - 24, cy - 10);
-        ctx.lineTo(cx - 14, cy - 22);
-        ctx.lineTo(cx - 4, cy - 10);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(cx + 4, cy - 10);
-        ctx.lineTo(cx + 14, cy - 22);
-        ctx.lineTo(cx + 24, cy - 10);
-        ctx.stroke();
-
-        if (isGoodySpeaking) {
-          ctx.beginPath();
-          ctx.ellipse(cx, cy + 15, 16, 8, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        } else {
-          ctx.beginPath();
-          ctx.arc(cx, cy + 10, 12, 0.2, Math.PI - 0.2, false);
-          ctx.stroke();
-        }
-      } else if (isLive && videoElem.readyState >= 2) {
-        ctx.save(); ctx.drawImage(videoElem, x + 2, y + 2, width - 4, height - 4); ctx.restore();
-      } else {
-        ctx.fillStyle = isGuy ? '#1b2a47' : '#3d1b38'; ctx.fillRect(x + 2, y + 2, width - 4, height - 4);
-        const cx = x + width / 2; const cy = y + height * 0.58;
-        ctx.fillStyle = isGuy ? '#4a69bd' : '#e84393'; ctx.beginPath(); ctx.ellipse(cx, cy + 25, 26, 32, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#f8c291'; ctx.beginPath(); ctx.arc(cx, cy - 10, 16, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(cx - 5, cy - 10, 2, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(cx + 5, cy - 10, 2, 0, Math.PI * 2); ctx.fill();
-      }
-
-      const diceSize = 42;
-      const diceX = x + width - diceSize - 12;
-      const diceY = y + 12;
-
-      if (isRolling) {
-        const animVal = Math.floor((performance.now() / 80) % 6) + 1;
-        drawDiceFace(ctx, diceX, diceY, diceSize, animVal);
-      } else if (currentRoll !== null) {
-        drawDiceFace(ctx, diceX, diceY, diceSize, currentRoll);
-      }
-
-      ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(x, y + height - 26, width, 26);
-      ctx.fillStyle = isGoodyHostSlot ? '#00f0ff' : (isLive ? '#39ff14' : '#ffda66');
-      ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center';
-     
-      const tag = isGoodyHostSlot
-        ? `[AI HOST: GOODY]`
-        : `${isLive ? ' LIVE ' : ' CALL'} ${name.toUpperCase()} [${city.toUpperCase()}]`;
-
-      ctx.fillText(tag, x + width/2, y + height - 8);
+    if (!studioPower && gameState === "MODE_PROMPT") {
+      renderStageQuestionBoard();
     }
-
-    function renderBackstageScreens() {
-      sScreenCtx.fillStyle = '#060210'; sScreenCtx.fillRect(0, 0, 512, 256);
-      if (studioPower) {
-        const isP1Goody = isVsGoodyMode && goodyPlayerSlot === "goody-contestant-1";
-        const isP2Goody = isVsGoodyMode && goodyPlayerSlot === "goody-contestant-2";
-
-        if (isSoloMode) {
-          sScreenCtx.fillStyle = '#030108';
-          sScreenCtx.fillRect(15, 20, 225, 215);
-          sScreenCtx.strokeStyle = '#441111';
-          sScreenCtx.lineWidth = 3;
-          sScreenCtx.strokeRect(15, 20, 225, 215);
-
-          sScreenCtx.fillStyle = '#ff7675';
-          sScreenCtx.font = 'bold 16px sans-serif';
-          sScreenCtx.textAlign = 'center';
-          sScreenCtx.fillText("GOODY MODE", 127, 105);
-
-          sScreenCtx.fillStyle = '#ffda66';
-          sScreenCtx.font = 'bold 12px monospace';
-          sScreenCtx.fillText("1 PLAYER SOLO MODE", 127, 135);
-        } else {
-          drawScreenFeed(sScreenCtx, 15, 20, 225, 215, contestantNames["goody-contestant-1"], contestantCities["goody-contestant-1"], hasLivePlayer1Stream, videoPlayer1, true, p1RollVal, isDiceRollingP1, isP1Goody);
-        }
-
-        if (isSoloMode) {
-          sScreenCtx.fillStyle = '#030108';
-          sScreenCtx.fillRect(272, 20, 225, 215);
-          sScreenCtx.strokeStyle = '#441111';
-          sScreenCtx.lineWidth = 3;
-          sScreenCtx.strokeRect(272, 20, 225, 215);
-
-          sScreenCtx.fillStyle = '#ff7675';
-          sScreenCtx.font = 'bold 18px sans-serif';
-          sScreenCtx.textAlign = 'center';
-          sScreenCtx.fillText("POWER OFF", 384, 105);
-
-          sScreenCtx.fillStyle = '#ffda66';
-          sScreenCtx.font = 'bold 13px monospace';
-          sScreenCtx.fillText("1 PLAYER SOLO MODE", 384, 135);
-        } else {
-          drawScreenFeed(sScreenCtx, 272, 20, 225, 215, contestantNames["goody-contestant-2"], contestantCities["goody-contestant-2"], hasLivePlayer2Stream, videoPlayer2, false, p2RollVal, isDiceRollingP2, isP2Goody);
-        }
-      }
-      studioScreenTex.needsUpdate = true;
+    if (isLocalHost && gameState === "IDLE" && isLocalOnPodium1 && isLocalOnPodium2 && !studioPower) {
+      chooseHostGameMode("TWOPLAYER");
     }
+  }
 
-    const studioBackScreenMesh = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 2.8), new THREE.MeshBasicMaterial({ map: studioScreenTex }));
-    studioBackScreenMesh.position.set(0, 3.4, -4.5); miniDiorama.add(studioBackScreenMesh);
+  function updatePlushieVisibility(plushieMesh, isP1Contestant, isP2Contestant) {
+    if (!plushieMesh) return;
+    const pos = plushieMesh.position;
+    const dP1 = pos.distanceTo(p1Pos);
+    const dP2 = pos.distanceTo(p2Pos);
+    const onPodium1 = dP1 < 0.65;
+    const onPodium2 = dP2 < 0.65;
+    const isGameActive = studioPower;
 
-    const miniGoody = new THREE.Group();
-    const silverMetalMat = new THREE.MeshStandardMaterial({
-      color: 0xcccccc, metalness: 0.95, roughness: 0.15
-    });
-
-    const gPodium = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.6, 20), new THREE.MeshStandardMaterial({ color: 0x2b154a }));
-    gPodium.position.y = 0.74; miniGoody.add(gPodium);
-
-    const podiumTrim = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.05, 20), silverMetalMat);
-    podiumTrim.position.y = 1.02; miniGoody.add(podiumTrim);
-
-    const gBody = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.4), silverMetalMat);
-    gBody.position.y = 1.34; miniGoody.add(gBody);
-    const gHead = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.35, 0.35), silverMetalMat);
-    gHead.position.y = 1.82; miniGoody.add(gHead);
-    const gAntennaStem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.22, 8), silverMetalMat);
-    gAntennaStem.position.y = 2.08; miniGoody.add(gAntennaStem);
-    const gAntOrb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshBasicMaterial({ color: 0x111111 }));
-    gAntOrb.position.y = 2.20; miniGoody.add(gAntOrb);
-
-    const faceCanvas = document.createElement('canvas'); faceCanvas.width = 128; faceCanvas.height = 128;
-    const fctx = faceCanvas.getContext('2d'); fctx.fillStyle = '#00'; fctx.fillRect(0, 0, 128, 128);
-    const faceTex = new THREE.CanvasTexture(faceCanvas);
-    const gFace = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.25), new THREE.MeshBasicMaterial({ map: faceTex }));
-    gFace.position.set(0, 1.82, 0.19); miniGoody.add(gFace);
-
-    miniGoody.position.set(0, 0, -2.6);
-    miniDiorama.add(miniGoody);
-
-    function renderGoodyFace(time) {
-      fctx.fillStyle = '#030108';
-      fctx.fillRect(0, 0, 128, 128);
-
-      if (!studioPower) {
-        gAntOrb.material.color.setHex(0x111111);
-        faceTex.needsUpdate = true;
-        return;
-      }
-
-      gAntOrb.material.color.setHex(isGoodySpeaking ? 0x00f0ff : 0x39ff14);
-
-      fctx.fillStyle = '#39ff14'; fctx.strokeStyle = '#39ff14'; fctx.lineWidth = 4;
-      fctx.lineCap = 'round'; fctx.lineJoin = 'round';
-
-      fctx.beginPath();
-      fctx.moveTo(28, 56); fctx.lineTo(44, 38); fctx.lineTo(60, 56); fctx.stroke();
-      fctx.beginPath();
-      fctx.moveTo(68, 56); fctx.lineTo(84, 38); fctx.lineTo(100, 56); fctx.stroke();
-
-      if (isGoodySpeaking) {
-        const mouthOpen = (Math.sin(time * 0.022) + 1.0) * 0.5;
-        const mouthHeight = 6 + (mouthOpen * 20);
-        const mouthWidth = 40 + (mouthOpen * 6);
-
-        fctx.fillStyle = '#220033'; fctx.strokeStyle = '#39ff14'; fctx.lineWidth = 3.5;
-        fctx.beginPath();
-        fctx.ellipse(64, 88, mouthWidth / 2, mouthHeight / 2, 0, 0, Math.PI * 2);
-        fctx.fill(); fctx.stroke();
-
-        fctx.fillStyle = '#ffffff';
-        fctx.fillRect(54, 88 - (mouthHeight / 2) + 2, 20, Math.min(5, mouthHeight / 2));
-      } else {
-        fctx.strokeStyle = '#39ff14'; fctx.lineWidth = 5;
-        fctx.beginPath();
-        fctx.arc(64, 78, 16, 0.2, Math.PI - 0.2, false);
-        fctx.stroke();
-      }
-
-      faceTex.needsUpdate = true;
-    }
-
-    function createStudioRoboticCamera(x, z) {
-      const camRig = new THREE.Group(); camRig.position.set(x, 0.44, z);
-      const darkMat = new THREE.MeshStandardMaterial({ color: 0x1f1f26 });
-      const basePlate = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.42, 0.08, 16), darkMat); basePlate.position.y = 0.04; camRig.add(basePlate);
-      const outerCol = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.13, 0.55, 16), darkMat); outerCol.position.y = 0.35; camRig.add(outerCol);
-      const headPivot = new THREE.Group(); headPivot.position.y = 1.0;
-      const cameraBox = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.24, 0.42), darkMat); headPivot.add(cameraBox);
-      const lensBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.095, 0.26, 16), new THREE.MeshStandardMaterial({ color: 0x0a0a0a }));
-      lensBarrel.rotation.x = Math.PI / 2; lensBarrel.position.set(0, 0, -0.24); headPivot.add(lensBarrel);
-      const frontGlass = new THREE.Mesh(new THREE.CircleGeometry(0.08, 16), new THREE.MeshBasicMaterial({ color: 0x00f0ff }));
-      frontGlass.position.set(0, 0, -0.431); headPivot.add(frontGlass);
-      const tallyLamp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), new THREE.MeshBasicMaterial({ color: 0x111111 }));
-      tallyLamp.position.set(0, 0.15, -0.28); headPivot.add(tallyLamp);
-      camRig.add(headPivot); miniDiorama.add(camRig);
-      return { headPivot, tallyLamp, frontGlass };
-    }
-    const autoCam1 = createStudioRoboticCamera(-2.4, 0.3);
-    const autoCam2 = createStudioRoboticCamera(2.4, 0.3);
-
-    function updateCameraAlignment() {
-      const hostHeadPos = new THREE.Vector3(0, 5.77, -11.6);
-      if (studioPower) {
-        autoCam1.headPivot.lookAt(hostHeadPos); autoCam2.headPivot.lookAt(hostHeadPos);
-        autoCam1.headPivot.rotation.y += Math.PI; autoCam2.headPivot.rotation.y += Math.PI;
-        autoCam1.tallyLamp.material.color.setHex(0xff0000); autoCam2.tallyLamp.material.color.setHex(0xff0000);
-      } else {
-        autoCam1.headPivot.rotation.set(0.6, 0.2, 0); autoCam2.headPivot.rotation.set(0.6, -0.2, 0);
-        autoCam1.tallyLamp.material.color.setHex(0x111111); autoCam2.tallyLamp.material.color.setHex(0x111111);
-      }
-    }
-    scene.add(miniDiorama);
-
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    let prevTime = performance.now();
-    function animate() {
-      requestAnimationFrame(animate);
-      const time = performance.now();
-      const delta = Math.min((time - prevTime) / 1000, 0.1);
-
-      renderBackstageScreens();
-      renderGoodyFace(time);
-
-      const isPlayerTurnRoll = gameState === "IN_PLAY" && !hasPlayerRolledThisTurn && (isSoloMode ? activePlayer === soloPlayerId : activePlayer !== goodyPlayerSlot);
-      if (gameState === "OPENING_DUEL" || isPlayerTurnRoll) {
-        renderStageQuestionBoard();
-      }
-
-      if (moveState.turnLeft) plushieRotation.yaw += 2.2 * delta;
-      if (moveState.turnRight) plushieRotation.yaw -= 2.2 * delta;
-
-      const moveSpeed = 3.8 * delta;
-      if (moveState.forward) {
-        plushiePosition.x -= Math.sin(plushieRotation.yaw) * moveSpeed;
-        plushiePosition.z -= Math.cos(plushieRotation.yaw) * moveSpeed;
-      }
-      if (moveState.backward) {
-        plushiePosition.x += Math.sin(plushieRotation.yaw) * moveSpeed;
-        plushiePosition.z += Math.cos(plushieRotation.yaw) * moveSpeed;
-      }
-
-      plushiePosition.x = Math.max(-6.5, Math.min(6.5, plushiePosition.x));
-      plushiePosition.z = Math.max(-6.5, Math.min(6.5, plushiePosition.z));
-
-      const dioramaWorldPos = new THREE.Vector3(0, 3.95, -9);
-      const plushieWorldPos = plushiePosition.clone().add(dioramaWorldPos);
-
-      const p1Pos = new THREE.Vector3(-1.6, 0.44, -2.2);
-      const p2Pos = new THREE.Vector3(1.6, 0.44, -2.2);
-
-      const distP1 = plushiePosition.distanceTo(p1Pos);
-      const distP2 = plushiePosition.distanceTo(p2Pos);
-
-      if (distP1 < 0.65 || distP2 < 0.65) {
-        plushiePosition.y = 0.58;
-      } else {
-        plushiePosition.y = 0.44;
-      }
-
-      localPlushie.position.copy(plushiePosition);
-      localPlushie.rotation.y = plushieRotation.yaw + Math.PI;
-
-      const camTargetX = plushieWorldPos.x + Math.sin(plushieRotation.yaw) * 3.2;
-      const camTargetZ = plushieWorldPos.z + Math.cos(plushieRotation.yaw) * 3.2;
-      const camTargetY = plushieWorldPos.y + 1.6;
-
-      camera.position.x += (camTargetX - camera.position.x) * 0.1;
-      camera.position.y += (camTargetY - camera.position.y) * 0.1;
-      camera.position.z += (camTargetZ - camera.position.z) * 0.1;
-
-      camera.lookAt(plushieWorldPos.x, plushieWorldPos.y + 0.6, plushieWorldPos.z);
-
-      const prevPodium1 = isLocalOnPodium1;
-      const prevPodium2 = isLocalOnPodium2;
-
-      isLocalOnPodium1 = distP1 < 0.65;
-      isLocalOnPodium2 = distP2 < 0.65;
-
-      if ((isLocalOnPodium1 !== prevPodium1) || (isLocalOnPodium2 !== prevPodium2)) {
-        if (!studioPower && gameState === "MODE_PROMPT") {
-          renderStageQuestionBoard();
-        }
-        if (gameState === "IDLE" && isLocalOnPodium1 && isLocalOnPodium2 && !studioPower) {
-          chooseHostGameMode("TWOPLAYER");
-        }
-      }
-
-      function updatePlushieVisibility(plushieMesh, isP1Contestant, isP2Contestant) {
-        if (!plushieMesh) return;
-        const pos = plushieMesh.position;
-        const dP1 = pos.distanceTo(p1Pos);
-        const dP2 = pos.distanceTo(p2Pos);
-        const onPodium1 = dP1 < 0.65;
-        const onPodium2 = dP2 < 0.65;
-        const isGameActive = studioPower;
-
-        if (!isGameActive) {
-          if (isSoloMode || isVsGoodyMode) {
-            if (onPodium1) {
-              setPlushieVisualMode(plushieMesh, 'opaque');
-            } else {
-              setPlushieVisualMode(plushieMesh, 'transparent');
-            }
-          } else {
-            if (onPodium1 || onPodium2) {
-              setPlushieVisualMode(plushieMesh, 'opaque');
-            } else {
-              setPlushieVisualMode(plushieMesh, 'transparent');
-            }
-          }
-          return;
-        }
-
-        const isContestantInShow = isP1Contestant || isP2Contestant;
-        if (isContestantInShow) {
+    if (!isGameActive) {
+      if (isSoloMode || isVsGoodyMode) {
+        if (onPodium1) {
           setPlushieVisualMode(plushieMesh, 'opaque');
-          return;
+        } else {
+          setPlushieVisualMode(plushieMesh, 'transparent');
         }
-
-        const boardCenter = new THREE.Vector3(0, 0.44, 1.8);
-        const distFromBoardCenter = pos.distanceTo(boardCenter);
-        const inGameArea = (distFromBoardCenter < 3.8) || (pos.z < 3.2);
-
-        if (inGameArea) {
-          setPlushieVisualMode(plushieMesh, 'invisible');
+      } else {
+        if (onPodium1 || onPodium2) {
+          setPlushieVisualMode(plushieMesh, 'opaque');
         } else {
           setPlushieVisualMode(plushieMesh, 'transparent');
         }
       }
-
-      const isLocalContestant = (isSoloMode && activePlayer === soloPlayerId) ||
-                                (isVsGoodyMode && activePlayer !== goodyPlayerSlot && isLocalOnPodium1) ||
-                                (!isSoloMode && !isVsGoodyMode && (isLocalOnPodium1 || isLocalOnPodium2));
-
-      updatePlushieVisibility(localPlushie, isLocalOnPodium1 && isLocalContestant, isLocalOnPodium2 && isLocalContestant);
-
-      if (playerPlushie1) {
-        const isP1InGame = studioPower && isP1Connected;
-        updatePlushieVisibility(playerPlushie1, isP1InGame, false);
-      }
-      if (playerPlushie2) {
-        const isP2InGame = studioPower && isP2Connected && !isVsGoodyMode;
-        updatePlushieVisibility(playerPlushie2, false, isP2InGame);
-      }
-
-      spectatorPlushies.forEach(sp => {
-        updatePlushieVisibility(sp, false, false);
-      });
-
-      if (pawn1 && pawn1.userData && pawn1.userData.badgeMesh) {
-        pawn1.userData.badgeMesh.quaternion.copy(camera.quaternion);
-      }
-      if (pawn2 && pawn2.userData && pawn2.userData.badgeMesh) {
-        pawn2.userData.badgeMesh.quaternion.copy(camera.quaternion);
-      }
-
-      if (studioPower) {
-        updateCameraAlignment();
-        fixtureCyan.target.position.x = -1.2 + Math.sin(time * 0.003) * 1.5;
-        fixtureMagenta.target.position.x = 1.2 + Math.cos(time * 0.003) * 1.5;
-
-        miniAudience.children.forEach((p) => {
-          p.position.y = p.userData.initialY + Math.sin(time * 0.006 + p.userData.phase) * 0.04;
-        });
-      }
-
-      // Render player capture streams so video feeds transmit properly over PeerJS
-      if (hasLivePlayer1Stream || showPlayer1) {
-        rendererPlayer1.render(scene, camPlayer1);
-      }
-      if (hasLivePlayer2Stream || showPlayer2) {
-        rendererPlayer2.render(scene, camPlayer2);
-      }
-
-      prevTime = time;
-
-      renderer.render(scene, camera);
+      return;
     }
-    animate();
+
+    const isContestantInShow = isP1Contestant || isP2Contestant;
+    if (isContestantInShow) {
+      setPlushieVisualMode(plushieMesh, 'opaque');
+      return;
+    }
+
+    const boardCenter = new THREE.Vector3(0, 0.44, 1.8);
+    const distFromBoardCenter = pos.distanceTo(boardCenter);
+    const inGameArea = (distFromBoardCenter < 3.8) || (pos.z < 3.2);
+
+    if (inGameArea) {
+      setPlushieVisualMode(plushieMesh, 'invisible');
+    } else {
+      setPlushieVisualMode(plushieMesh, 'transparent');
+    }
+  }
+
+  const isLocalContestant = (isSoloMode && activePlayer === soloPlayerId) ||
+                            (isVsGoodyMode && activePlayer !== goodyPlayerSlot && isLocalOnPodium1) ||
+                            (!isSoloMode && !isVsGoodyMode && (isLocalOnPodium1 || isLocalOnPodium2));
+
+  updatePlushieVisibility(localPlushie, isLocalOnPodium1 && isLocalContestant, isLocalOnPodium2 && isLocalContestant);
+
+  // Update visibility for all remote connected players' plushies
+  remotePlushies.forEach((entry) => {
+    const rPos = entry.mesh.position;
+    const rOnP1 = rPos.distanceTo(p1Pos) < 0.65;
+    const rOnP2 = rPos.distanceTo(p2Pos) < 0.65;
+    updatePlushieVisibility(entry.mesh, rOnP1, rOnP2);
+  });
+
+  if (playerPlushie1) {
+    const isP1InGame = studioPower && isP1Connected;
+    updatePlushieVisibility(playerPlushie1, isP1InGame, false);
+  }
+  if (playerPlushie2) {
+    const isP2InGame = studioPower && isP2Connected && !isVsGoodyMode;
+    updatePlushieVisibility(playerPlushie2, false, isP2InGame);
+  }
+
+  spectatorPlushies.forEach(sp => {
+    updatePlushieVisibility(sp, false, false);
+  });
+
+  if (pawn1 && pawn1.userData && pawn1.userData.badgeMesh) {
+    pawn1.userData.badgeMesh.quaternion.copy(camera.quaternion);
+  }
+  if (pawn2 && pawn2.userData && pawn2.userData.badgeMesh) {
+    pawn2.userData.badgeMesh.quaternion.copy(camera.quaternion);
+  }
+
+  if (studioPower) {
+    updateCameraAlignment();
+    fixtureCyan.target.position.x = -1.2 + Math.sin(time * 0.003) * 1.5;
+    fixtureMagenta.target.position.x = 1.2 + Math.cos(time * 0.003) * 1.5;
+
+    miniAudience.children.forEach((p) => {
+      p.position.y = p.userData.initialY + Math.sin(time * 0.006 + p.userData.phase) * 0.04;
+    });
+  }
+
+  prevTime = time;
+
+  renderer.render(scene, camera);
+}
+animate();
   </script>
 </body>
 </html>
