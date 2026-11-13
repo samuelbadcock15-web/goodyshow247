@@ -3244,13 +3244,18 @@ function handleScreenTap(clientX, clientY) {
     }
 
     if (activeQuestion && canvasY >= 0) {
+      const isParticipant = selfSocketId && (lockedP1SocketId === selfSocketId || (!isVsGoodyMode && lockedP2SocketId === selfSocketId));
+      if (!isTieBreakerActive && !isLocalTurnOwner()) return;
+      if (isTieBreakerActive && !isParticipant) return;
+      if (stageSelectedOption !== null) return;
+
       // Exact pixel match for Option boxes: optY = 210 + (idx * 40), rect top = optY - 24, height = 32
       for (let idx = 0; idx < activeQuestion.options.length; idx++) {
         const boxTop = (210 + idx * 40) - 24;
         const boxBottom = boxTop + 32;
         if (canvasX >= 20 && canvasX <= 492 && canvasY >= boxTop && canvasY <= boxBottom) {
           if (!isLocalHost) {
-if (socket && socket.connected) {
+            if (socket && socket.connected) {
               socket.emit('client_action', { type: 'ANSWER_QUESTION', optionIndex: idx, senderId: selfSocketId });
             }
             return;
