@@ -2455,10 +2455,11 @@ bigCinemaCanvas.width = 1024; bigCinemaCanvas.height = 717;
 
     // --- UPDATED: Main Cinema Screen increased by 40% in height ---
 const bigScreenMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(14, 9.8), // Height increased from 7 to 9.8 (7 * 1.4)
-  new THREE.MeshBasicMaterial({ map: bigScreenTex })
+  new THREE.PlaneGeometry(14, 9.8),
+  new THREE.MeshBasicMaterial({ map: bigScreenTex, side: THREE.DoubleSide }) // Added side: THREE.DoubleSide so it renders from both sides
 );
-bigScreenMesh.position.set(0, 6.3, -5.5); // Raised position from 5.2 to 6.3
+bigScreenMesh.position.set(0, 6.3, -5.5);
+bigScreenMesh.rotation.y = Math.PI; // Rotates the screen 180 degrees to face the other way
 cinemaHubGroup.add(bigScreenMesh);
     const feltCarpet = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48), new THREE.MeshStandardMaterial({ color: 0x271147 }));
     feltCarpet.position.y = 0.44;
