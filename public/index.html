@@ -647,6 +647,7 @@ socket.on('remote_client_action', (action) => {
           }
         }
       });
+    }
 
     function speakGoodyLocalOnly(text) {
       if (!('speechSynthesis' in window)) return;
