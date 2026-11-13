@@ -593,24 +593,6 @@ lockedP1SocketId = state.lockedP1SocketId || null;
           miniDiorama.remove(entry.mesh);
           remotePlushies.delete(id);
         }
-
-        if (cId === "goody-contestant-1" && p1PeerId === conn.peer) {
-          isP1Connected = false;
-          p1PeerId = null;
-        }
-        if (cId === "goody-contestant-2" && p2PeerId === conn.peer) {
-          isP2Connected = false;
-          p2PeerId = null;
-        }
-
-        // Host-side drop-out trigger for active games
-        if (isLocalHost && studioPower && gameState === "IN_PLAY") {
-          if (id === lockedP1SocketId) {
-            handleMidGameDropout("goody-contestant-1");
-          } else if (id === lockedP2SocketId && !isSoloMode && !isVsGoodyMode) {
-            handleMidGameDropout("goody-contestant-2");
-          }
-        }
       });
 
       socket.on('audience_count', ({ count }) => {
@@ -740,7 +722,7 @@ socket.on('remote_client_action', (action) => {
         activePlayer = soloPlayerId;
         p2RollVal = null;
         isDiceRollingP2 = false;
-        
+       
         pawn2.visible = false;
         pawn1.visible = true;
         if (window.p2PodiumGroup) window.p2PodiumGroup.visible = false;
@@ -909,6 +891,9 @@ socket.on('remote_client_action', (action) => {
       window.speechSynthesis.cancel();
       isGoodySpeaking = false;
 
+      broadcastMicState("goody-contestant-1", false);
+      broadcastMicState("goody-contestant-2", false);
+
       stopDiceCountdown();
       if (questionInterval) clearInterval(questionInterval);
       if (matchTimerInterval) clearInterval(matchTimerInterval);
@@ -920,43 +905,6 @@ socket.on('remote_client_action', (action) => {
       isQuestionTimerActive = false;
       questionTimer = 0;
 
-      // Hide the dropped player's podium & pawn
-      if (contestantId === "goody-contestant-1") {
-        lockedP1SocketId = null;
-        if (window.p1PodiumGroup) window.p1PodiumGroup.visible = true; // Keep podium base visible for next game
-        if (typeof pawn1 !== 'undefined') pawn1.visible = false;
-      } else {
-        lockedP2SocketId = null;
-        if (window.p2PodiumGroup) window.p2PodiumGroup.visible = true;
-        if (typeof pawn2 !== 'undefined') pawn2.visible = false;
-      }
-
-      // Check if BOTH players have now dropped out
-      const bothDropped = !lockedP1SocketId && !lockedP2SocketId;
-
-      if (bothDropped) {
-        // Full Studio Reset & Perfect Loop
-        studioPower = false;
-        gameState = "MODE_PROMPT";
-        p1Index = 0;
-        p2Index = 0;
-        updateStudioLighting(false);
-        updateCameraAlignment();
-        updateHudStatusBanner();
-        renderStageQuestionBoard();
-        pushAuthoritativeState();
-
-        const finalSpeech = "Both contestants have disconnected! Goodnight everyone! Studio powering down... Podium 1 is now open for a new game!";
-        speakGoody(finalSpeech, () => {
-          // Re-trigger the initial welcoming prompt so the next player gets invited in
-          if (isLocalHost && !studioPower) {
-            triggerImmediateModePrompt();
-          }
-        });
-        return;
-      }
-
-      // Otherwise, trigger the single-player recovery prompt for the remaining player
       savedGameState = gameState;
       savedTurnPlayer = activePlayer;
       savedActiveCountry = activeQuestion ? activeQuestion.country : null;
@@ -966,17 +914,84 @@ socket.on('remote_client_action', (action) => {
       stageSelectedOption = null;
       stageOptionStatus = null;
 
+      gameState = "INTERMISSION";
+      droppedOutContestant = contestantId;
+      droppedOutName = contestantNames[contestantId] || "";
+      droppedOutCity = contestantCities[contestantId] || "";
+      droppedOutSessionToken = contestantTokens[contestantId] || null;
+
+      const droppedNum = contestantId === "goody-contestant-1" ? `Player 1 (${droppedOutName})` : `Player 2 (${droppedOutName})`;
+
+      countdownPill.innerHTML = `STATUS: <span style="color:#ff7675;">INTERMISSION: WAITING FOR RECONNECT...</span>`;
+      renderStageQuestionBoard();
+      pushAuthoritativeState();
+
+      connectedDataConns.forEach(c => {
+        if (c.open) c.send({ type: "INTERMISSION_PAUSE", droppedContestant: contestantId });
+      });
+
+      const speech = `Ladies and gentlemen, it appears ${droppedNum} has lost connection! We are taking a short intermission while our studio crew gets them back online!`;
+      speakGoody(speech);
+
+      if (intermissionTimeout) clearTimeout(intermissionTimeout);
+      intermissionTimeout = setTimeout(() => {
+        if (gameState === "INTERMISSION") {
+          triggerOfferChoiceMode();
+        }
+      }, 90000);
+    }
+
+    function triggerOnePlayerMode() {
+      if (gameState !== "INTERMISSION" && gameState !== "CONTESTANT_CHOOSING" && gameState !== "MODE_PROMPT") return;
+
+      if (intermissionTimeout) clearTimeout(intermissionTimeout);
+      isSoloMode = true;
+      isVsGoodyMode = false;
+
+      soloPlayerId = "goody-contestant-1";
+      const soloName = contestantNames[soloPlayerId];
+      activePlayer = soloPlayerId;
+
+      p2RollVal = null;
+      isDiceRollingP2 = false;
+      pawn2.visible = false;
+      pawn1.visible = true;
+      if (window.p2PodiumGroup) window.p2PodiumGroup.visible = false;
+
+      countdownPill.innerHTML = `STATUS: <span style="color:#39ff14;">SOLO RACE ACTIVE!</span>`;
+      gameState = "IN_PLAY";
+      renderStageQuestionBoard();
+
+      startTwentyMinuteMatchTimer();
+      broadcastBoardState();
+
+      const speech = `Welcome back to the show! ${soloName} will now race the board alone to see if they can reach the end before the 20-minute show clock expires! Let's play!`;
+      speakGoody(speech, () => {
+        if (savedActiveCountry && savedTurnPlayer === soloPlayerId) {
+          const countryToAsk = savedActiveCountry;
+          savedActiveCountry = null;
+          resumeWithFreshQuestion(soloPlayerId, countryToAsk);
+        } else {
+          savedActiveCountry = null;
+          startTurnCleanly(soloPlayerId);
+        }
+      });
+    }
+
+    function triggerOfferChoiceMode() {
+      if (gameState !== "INTERMISSION") return;
+
+      if (intermissionTimeout) clearTimeout(intermissionTimeout);
       gameState = "CONTESTANT_CHOOSING";
-      const remainingId = lockedP1SocketId ? "goody-contestant-1" : "goody-contestant-2";
-      const remainingName = contestantNames[remainingId] || "Contestant";
+
+      const remainingId = isP1Connected ? "goody-contestant-1" : "goody-contestant-2";
+      const remainingName = contestantNames[remainingId];
 
       countdownPill.innerHTML = `STATUS: <span style="color:#ffda66;">WAITING FOR ${remainingName.toUpperCase()}'S CHOICE...</span>`;
       renderStageQuestionBoard();
       pushAuthoritativeState();
 
-      const dropNum = contestantId === "goody-contestant-1" ? "Player 1" : "Player 2";
-      const speech = `Ladies and gentlemen, ${dropNum} has disconnected! Their podium is offline. ${remainingName}, you can choose to go solo against the 20-minute timer, or battle me, Goody, head-to-head! Make your choice now!`;
-      
+      const speech = `Welcome back to The Goody Tonight Show! Unfortunately, we have been unable to find a replacement. So ${remainingName}, you can choose to go solo against the 20-minute timer, or battle me, Goody, head-to-head! Make your choice now!`;
       speakGoody(speech, () => {
         connectedDataConns.forEach(c => {
           if (c.open) c.send({ type: "OFFER_CONTESTANT_CHOICE" });
@@ -1647,7 +1662,7 @@ socket.on('remote_client_action', (action) => {
         if (onComplete) onComplete();
         return;
       }
-      
+     
       window.speechSynthesis.cancel();
       goodyUtterance = new SpeechSynthesisUtterance(text);
       goodyUtterance.rate = 0.95;
@@ -3150,7 +3165,7 @@ miniDiorama.add(screenClickMesh);
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-    
+   
 function isLocalTurnOwner() {
   if (!selfSocketId) return false;
   if (activePlayer === "goody-contestant-1") return lockedP1SocketId === selfSocketId;
