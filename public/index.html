@@ -378,7 +378,7 @@ function pushAuthoritativeState() {
         pawn1.visible = studioPower;
         if (studioPower && prevP1 !== p1Index) {
           animatePawnHop(pawn1, prevP1, p1Index, -0.08, null, p1Index === 0 ? 110 : 280);
-        } else if (prevP1 === p1Index) {
+        } else if (prevP1 === p1Index && !pawn1.userData.isHopping) {
           pawn1.position.set(boardTileCoords[p1Index].x - 0.08, 0.52, boardTileCoords[p1Index].z);
         }
       }
@@ -390,7 +390,7 @@ function pushAuthoritativeState() {
         if (window.p2PodiumGroup) window.p2PodiumGroup.visible = !isSoloMode;
         if (studioPower && !isSoloMode && prevP2 !== p2Index) {
           animatePawnHop(pawn2, prevP2, p2Index, 0.08, null, p2Index === 0 ? 110 : 280);
-        } else if (prevP2 === p2Index) {
+        } else if (prevP2 === p2Index && !pawn2.userData.isHopping) {
           pawn2.position.set(boardTileCoords[p2Index].x + 0.08, 0.52, boardTileCoords[p2Index].z);
         }
       }
@@ -1859,7 +1859,13 @@ function finalizeDiceDuel() {
 }
 
 function animatePawnHop(pawn, fromIdx, toIdx, offsetX, onComplete, hopDurationMs = 280) {
+  // Cancel any in-flight hop animation on this pawn so loops never collide
+  const hopToken = (pawn.userData.hopToken || 0) + 1;
+  pawn.userData.hopToken = hopToken;
+  pawn.userData.isHopping = true;
+
   if (fromIdx === toIdx) {
+    pawn.userData.isHopping = false;
     if (onComplete) onComplete();
     return;
   }
@@ -1868,12 +1874,15 @@ function animatePawnHop(pawn, fromIdx, toIdx, offsetX, onComplete, hopDurationMs
   let currentHopIdx = fromIdx;
 
   function hopNextStep() {
+    if (pawn.userData.hopToken !== hopToken) return;
     if (gameState === "INTERMISSION") {
+      pawn.userData.isHopping = false;
       isPawnMoving = false;
       return;
     }
 
     if (currentHopIdx === toIdx) {
+      pawn.userData.isHopping = false;
       if (onComplete) onComplete();
       return;
     }
@@ -1894,7 +1903,9 @@ function animatePawnHop(pawn, fromIdx, toIdx, offsetX, onComplete, hopDurationMs
     playTone(320 + Math.random() * 80, 'sine', 0.06, 0.04);
 
     function stepFrame(now) {
+      if (pawn.userData.hopToken !== hopToken) return;
       if (gameState === "INTERMISSION") {
+        pawn.userData.isHopping = false;
         isPawnMoving = false;
         return;
       }
