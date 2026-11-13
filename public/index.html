@@ -2414,41 +2414,10 @@ miniDiorama.position.set(0, 3.95, -9);
 
 // --- GRAND CINEMA THEATER HUB ---
 const cinemaHubGroup = new THREE.Group();
-cinemaHubGroup.position.set(0, -0.2, -2.5); // Aligned directly to wrap around the game show base
+cinemaHubGroup.position.set(0, 0, 0);
 scene.add(cinemaHubGroup);
 
-// Tiered Amphitheater Seating (Gladiator/Colosseum Style)
-for (let r = 0; r < 7; r++) {
-  const tierRadius = 6.2 + (r * 1.3);
-  const tierStep = new THREE.Mesh(
-    new THREE.CylinderGeometry(tierRadius, tierRadius + 1.2, 0.45, 32, 1, true, -Math.PI * 0.78, Math.PI * 1.56),
-    new THREE.MeshStandardMaterial({ color: 0x1b0c30, roughness: 0.4, metalness: 0.3 })
-  );
-  // Stack each row higher and further back so it forms steep stadium steps
-  tierStep.position.set(0, 0.15 + (r * 0.55), r * 1.1);
-  cinemaHubGroup.add(tierStep);
-}
-
-const miniDiorama = new THREE.Group();
-miniDiorama.position.set(0, 3.95, -9);
-
-// --- GRAND CINEMA THEATER HUB ---
-const cinemaHubGroup = new THREE.Group();
-cinemaHubGroup.position.set(0, -0.4, -3.0);
-scene.add(cinemaHubGroup);
-
-// Tiered Amphitheater Seating (Gladiator/Colosseum Style)
-for (let r = 0; r < 7; r++) {
-  const tierRadius = 6.8 + (r * 1.5);
-  const tierStep = new THREE.Mesh(
-    new THREE.CylinderGeometry(tierRadius, tierRadius + 1.4, 0.5, 32, 1, true, -Math.PI * 0.78, Math.PI * 1.56),
-    new THREE.MeshStandardMaterial({ color: 0x1b0c30, roughness: 0.4, metalness: 0.3 })
-  );
-  tierStep.position.set(0, 0.2 + (r * 0.65), r * 1.25);
-  cinemaHubGroup.add(tierStep);
-}
-
-// Giant Front Cinema Screen (IMAX Style Overhang)
+// Giant Front Cinema Screen (Rotated 180° to face the new seating position)
 const bigCinemaCanvas = document.createElement('canvas');
 bigCinemaCanvas.width = 1024; bigCinemaCanvas.height = 512;
 const bigCtx = bigCinemaCanvas.getContext('2d');
@@ -2475,10 +2444,24 @@ renderBigCinemaScreen();
 
 const bigScreenMesh = new THREE.Mesh(
   new THREE.PlaneGeometry(18, 9),
-  new THREE.MeshBasicMaterial({ map: bigScreenTex })
+  new THREE.MeshBasicMaterial({ map: bigScreenTex, side: THREE.DoubleSide })
 );
-bigScreenMesh.position.set(0, 9.5, -11.0);
+// Positioned in front of the studio area, facing towards the new seating behind it
+bigScreenMesh.position.set(0, 5.0, -8.0);
+bigScreenMesh.rotation.y = Math.PI; // Turned 180 degrees to face the new seating
 cinemaHubGroup.add(bigScreenMesh);
+
+// Tiered Amphitheater Seating (Moved to the other side of the screen and elevated)
+for (let r = 0; r < 7; r++) {
+  const tierRadius = 6.8 + (r * 1.5);
+  const tierStep = new THREE.Mesh(
+    new THREE.CylinderGeometry(tierRadius, tierRadius + 1.4, 0.6, 32, 1, true, Math.PI * 0.22, Math.PI * 1.56),
+    new THREE.MeshStandardMaterial({ color: 0x1b0c30, roughness: 0.4, metalness: 0.3 })
+  );
+  // Bottom row (r = 0) starts at floor level (y = 0), stepping higher backward (-z direction)
+  tierStep.position.set(0, 0.0 + (r * 0.7), -13.0 - (r * 1.3));
+  cinemaHubGroup.add(tierStep);
+}
 const feltCarpet = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48), new THREE.MeshStandardMaterial({ color: 0x271147 }));
 feltCarpet.position.y = 0.44;
 miniDiorama.add(feltCarpet);
