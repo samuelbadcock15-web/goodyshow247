@@ -2,23 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>The Goody Tonight Show - Plushie Foosball & Rugby Arena</title>
-<style>
-    body, html {
-      margin: 0; padding: 0; width: 100%; height: 100%;
-      overflow: hidden; background-color: #05020a;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      touch-action: none;
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>The Goody Tonight Show - Live Studio Host</title>
+  <style>
+    * {
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
       -webkit-tap-highlight-color: transparent;
     }
-   
-    #canvas3d {
-      width: 100%; height: 100%; display: block; cursor: pointer;
-      -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    body, html {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      overflow: hidden; background-color: #05020a;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      touch-action: none;
     }
+    #canvas3d { width: 100%; height: 100%; display: block; cursor: pointer; }
 
     #hud {
       position: absolute; top: 15px; left: 15px; background: rgba(22, 9, 44, 0.9);
@@ -26,6 +25,7 @@
       font-family: monospace; font-size: 0.85rem; pointer-events: none; z-index: 20;
       box-shadow: 0 0 20px rgba(255, 121, 176, 0.25);
     }
+    #net-role-pill { margin-top: 4px; font-weight: bold; color: #00f0ff; font-size: 0.85rem; }
     #room-code-pill { margin-top: 5px; font-weight: bold; color: #39ff14; font-size: 0.95rem; }
     #countdown-pill { margin-top: 6px; font-weight: bold; color: #ffda66; font-size: 0.95rem; }
     #match-clock-hud { margin-top: 4px; font-weight: bold; color: #00f0ff; font-size: 0.95rem; }
@@ -39,330 +39,158 @@
       pointer-events: none;
     }
 
-    #mobile-dpad {
-      position: absolute;
-      bottom: 70px;
-      left: 70px;
+    /* Mobile-Only Crosshair & Touch Controls (Hidden on PC/Desktop) */
+    #mobile-crosshair {
       display: none;
-      grid-template-areas:
-        ". up ."
-        "left down right";
-      gap: 16px;
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 26px; height: 26px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
       z-index: 30;
-      pointer-events: auto;
-      touch-action: none;
+    }
+    #mobile-crosshair::before, #mobile-crosshair::after {
+      content: "";
+      position: absolute;
+      background: #00f0ff;
+      box-shadow: 0 0 6px #39ff14;
+    }
+    #mobile-crosshair::before {
+      top: 12px; left: 0; width: 26px; height: 2px;
+    }
+    #mobile-crosshair::after {
+      left: 12px; top: 0; width: 2px; height: 26px;
     }
 
-    .dpad-btn {
-      width: 110px;
-      height: 110px;
-      background: rgba(22, 9, 44, 0.85);
+    #mobile-controls {
+      display: none;
+      position: fixed;
+      bottom: 95px;
+      left: 65px;
+      right: 65px;
+      justify-content: space-between;
+      align-items: flex-end;
+      pointer-events: none;
+      z-index: 35;
+    }
+    .dpad-vertical {
+      display: grid;
+      grid-template-columns: 136px;
+      grid-template-rows: repeat(2, 136px);
+      gap: 14px;
+      pointer-events: auto;
+    }
+    .dpad-horizontal {
+      display: grid;
+      grid-template-columns: repeat(2, 136px);
+      grid-template-rows: 136px;
+      gap: 14px;
+      pointer-events: auto;
+    }
+    .m-btn {
+      background: rgba(22, 9, 44, 0.88);
       border: 3px solid #00f0ff;
-      border-radius: 18px;
-      color: #00f0ff;
-      font-size: 46px;
+      border-radius: 22px;
+      color: #fff;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 3rem;
       display: flex;
       align-items: center;
       justify-content: center;
       user-select: none;
       -webkit-user-select: none;
       -webkit-touch-callout: none;
-      -webkit-tap-highlight-color: transparent;
-      box-shadow: 0 0 16px rgba(0, 240, 255, 0.4);
-      transition: background 0.1s, box-shadow 0.1s, border-color 0.1s;
-    }
-
-    .dpad-btn.active, .dpad-btn:active {
-      background: rgba(0, 240, 255, 0.45);
-      border-color: #39ff14;
-      color: #39ff14;
-      box-shadow: 0 0 22px #39ff14;
-    }
-
-    #look-pad {
-      position: absolute;
-      bottom: 80px;
-      right: 80px;
-      width: 200px;
-      height: 200px;
-      background: rgba(22, 9, 44, 0.65);
-      border: 2px solid rgba(0, 240, 255, 0.6);
-      border-radius: 50%;
-      z-index: 30;
-      pointer-events: auto;
       touch-action: none;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
-      user-select: none;
-      -webkit-user-select: none;
-      cursor: grab;
+    }
+    .m-btn:active, .m-btn.is-pressed {
+      background: #00f0ff;
+      color: #05020a;
     }
 
-    #look-pad:active {
-      cursor: grabbing;
-    }
-
-    #look-pad-thumb {
-      width: 75px;
-      height: 75px;
-      background: rgba(0, 240, 255, 0.3);
-      border: 2px solid #39ff14;
-      border-radius: 50%;
-      color: #39ff14;
-      font-family: monospace;
-      font-size: 11px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      pointer-events: none;
-      user-select: none;
-    }
-
-    #mobile-crosshair {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 24px;
-      height: 24px;
-      border: 2px solid rgba(0, 240, 255, 0.8);
-      border-radius: 50%;
-      pointer-events: none;
-      display: none;
-      z-index: 15;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-
-    @media (pointer: coarse), (max-width: 900px) {
-      #mobile-dpad { display: grid; }
-      #look-pad { display: flex !important; }
-      #mode-banner { display: none; }
+    @media (hover: none) and (pointer: coarse) {
       #mobile-crosshair { display: block; }
+      #mobile-controls { display: flex; }
+      #mode-banner { display: none; }
     }
   </style>
 </head>
 <body>
   <div id="hud">
-    <div class="hud-title" id="mode-title" style="color: #ffda66;">STUDIO FLOOR & WIDE PLUSHIE RUGBY-FOOTIE ARENA</div>
-    <div class="hud-sub" id="mode-sub">Bump into the ball with your belly & bash into friends!</div>
+    <div class="hud-title" id="mode-title" style="color: #ffda66;">STUDIO FLOOR WORKSHOP</div>
+    <div class="hud-sub" id="mode-sub">Third-Person Follow Mode: Active • Tap Studio Screen to Stop Dice</div>
+    <div id="net-role-pill">NET: <span id="net-role-val" style="color:#ffda66;">CONNECTING TO RENDER...</span></div>
     <div id="room-code-pill">CODE: <span id="hud-code-val">----</span></div>
-    <div id="countdown-pill">STATUS: <span id="timer-val" style="color:#ffda66;">WALK WAY OUT EAST TO THE GIANT FOOTBALL PITCH!</span></div>
+    <div id="countdown-pill">STATUS: <span id="timer-val" style="color:#ffda66;">SELECT GAME MODE (STEP ON PODIUM 1)</span></div>
     <div id="match-clock-hud">SHOW CLOCK: <span id="game-clock-val" style="color:#ffda66;">20:00</span></div>
     <div id="audience-pill">AUDIENCE WATCHING: <span id="audience-count" style="color:#39ff14;">1</span></div>
   </div>
 
+  <div id="mobile-crosshair"></div>
+
+  <div id="mobile-controls">
+    <div class="dpad-vertical">
+      <div class="m-btn" id="btn-m-fwd" role="button" aria-label="Forward">▲</div>
+      <div class="m-btn" id="btn-m-back" role="button" aria-label="Backward">▼</div>
+    </div>
+    <div class="dpad-horizontal">
+      <div class="m-btn" id="btn-m-left" role="button" aria-label="Turn Left">◀</div>
+      <div class="m-btn" id="btn-m-right" role="button" aria-label="Turn Right">▶</div>
+    </div>
+  </div>
+
   <div id="mode-banner">
-    Move with <span style="color:#39ff14;">W, A, S, D</span> • Walk far out East to the expanded <span style="color:#00f0ff;">Plushie Bumper Arena</span>!
+    Move with <span style="color:#39ff14;">W, A, S, D</span> • Step onto <span style="color:#00d2d3;">Podium 1</span> to unlock • Tap the <span style="color:#00f0ff;">Main Studio Screen</span> to stop the dice!
   </div>
 
   <canvas id="canvas3d"></canvas>
 
-  <div id="mobile-dpad">
-    <div class="dpad-btn" id="btn-up" style="grid-area: up;">▲</div>
-    <div class="dpad-btn" id="btn-left" style="grid-area: left;">◄</div>
-    <div class="dpad-btn" id="btn-down" style="grid-area: down;">▼</div>
-    <div class="dpad-btn" id="btn-right" style="grid-area: right;">►</div>
-  </div>
-
-  <div id="look-pad">
-    <div id="look-pad-thumb">GEARBOX</div>
-  </div>
-
-  <div id="mobile-crosshair"></div>
-
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://goodyshow247.onrender.com/socket.io/socket.io.js"></script>
 
   <script>
     let isHostAuthorized = true;
+    let isLocalHost = false;
+    let selfSocketId = null;
     let socket = null;
-    const remotePlayers = new Map();
-    let localMyGuestName = "Guest 1";
-    let isBallPhysicsHost = false;
+    const remotePlushies = new Map();
+    let lastEmitMoveTime = 0;
+    let lastPodiumClaimed = 0;
+    let podiumCooldownUntil = 0;
+    let lockedP1SocketId = null;
+    let lockedP2SocketId = null;
+    let p2InviteAttempts = 0;
+
+    function getPodiumCooldownRemaining() {
+      return Math.max(0, Math.ceil((podiumCooldownUntil - Date.now()) / 1000));
+    }
+
+    const MAX_GAMES_PER_SESSION = 2;
+    let sessionGamesPlayed = parseInt(localStorage.getItem('goody_session_games_played') || '0', 10);
+
+    function hasReachedSessionGameLimit() {
+      return sessionGamesPlayed >= MAX_GAMES_PER_SESSION;
+    }
+
+    function recordSessionGameStarted() {
+      if (!isLocalOnPodium1 && !isLocalOnPodium2) return;
+      sessionGamesPlayed++;
+      localStorage.setItem('goody_session_games_played', String(sessionGamesPlayed));
+    }
 
     function unlockHostEnvironment() {
       isHostAuthorized = true;
       initAudio();
       initStudioWebRTC();
-      initSocketConnection();
-      triggerImmediateModePrompt();
+      initSocketMultiplayer();
     }
 
     window.addEventListener('DOMContentLoaded', () => {
       unlockHostEnvironment();
     });
 
-    const lookPad = document.getElementById('look-pad');
-    const lookPadThumb = document.getElementById('look-pad-thumb');
-
-    let isLooking = false;
-    let lookTouchId = null;
-    let padCenterX = 0;
-    let padCenterY = 0;
-
-    // Latched gear state (stays locked until shifted back to center)
-    let currentLockedGear = 'NEUTRAL';
-
-    function handleLookStart(clientX, clientY, identifier = null) {
-      isLooking = true;
-      lookTouchId = identifier;
-
-      const rect = lookPad.getBoundingClientRect();
-      padCenterX = rect.left + rect.width / 2;
-      padCenterY = rect.top + rect.height / 2;
-
-      handleLookMove(clientX, clientY);
-    }
-
-    function handleLookMove(clientX, clientY) {
-      if (!isLooking) return;
-
-      const deltaX = clientX - padCenterX;
-      const deltaY = clientY - padCenterY;
-
-      const maxThumbOffset = 40;
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      const angle = Math.atan2(deltaY, deltaX);
-
-      const clampedDist = Math.min(maxThumbOffset, distance);
-      const clampedX = Math.cos(angle) * clampedDist;
-      const clampedY = Math.sin(angle) * clampedDist;
-
-      lookPadThumb.style.transform = `translate(${clampedX}px, ${clampedY}px)`;
-
-      const threshold = 12;
-      const neutralZone = 10;
-      let requestedGear = 'NEUTRAL';
-
-      if (distance > neutralZone) {
-        if (Math.abs(deltaY) > Math.abs(deltaX)) {
-          if (deltaY < -threshold) requestedGear = 'FORWARD';
-          else if (deltaY > threshold) requestedGear = 'BACKWARD';
-        } else {
-          if (deltaX < -threshold) requestedGear = 'TURN_LEFT';
-          else if (deltaX > threshold) requestedGear = 'TURN_RIGHT';
-        }
-      } else {
-        requestedGear = 'NEUTRAL';
-      }
-
-      // Lock in the new gear selection
-      currentLockedGear = requestedGear;
-      applyGearboxStates();
-    }
-
-    function handleLookEnd() {
-      isLooking = false;
-      lookTouchId = null;
-
-      // Notice we DO NOT reset the thumb or gear here!
-      // It stays latched in gear until you shift it back to the center neutral zone.
-    }
-
-    function applyGearboxStates() {
-      let stickForward = currentLockedGear === 'FORWARD';
-      let stickBackward = currentLockedGear === 'BACKWARD';
-      let stickLeft = currentLockedGear === 'TURN_LEFT';
-      let stickRight = currentLockedGear === 'TURN_RIGHT';
-
-      // Combine latched gearbox stick with D-pad button states
-      moveState.forward = stickForward || (btnUp && btnUp.classList.contains('active'));
-      moveState.backward = stickBackward || (btnDown && btnDown.classList.contains('active'));
-      moveState.turnLeft = stickLeft || (btnLeft && btnLeft.classList.contains('active'));
-      moveState.turnRight = stickRight || (btnRight && btnRight.classList.contains('active'));
-
-      // Update thumbnail indicator text
-      if (lookPadThumb) {
-        if (currentLockedGear === 'FORWARD') lookPadThumb.textContent = "GEAR: 1";
-        else if (currentLockedGear === 'BACKWARD') lookPadThumb.textContent = "GEAR: R";
-        else if (currentLockedGear === 'TURN_LEFT') lookPadThumb.textContent = "PIVOT ◄";
-        else if (currentLockedGear === 'TURN_RIGHT') lookPadThumb.textContent = "PIVOT ►";
-        else lookPadThumb.textContent = "NEUTRAL";
-      }
-    }
-
-    window.addEventListener('touchstart', (e) => {
-      if (e.target.closest('#mobile-dpad') || e.target.closest('#look-pad') || e.target.closest('#hud') || e.target.closest('#mode-banner')) return;
-      e.preventDefault();
-      if (e.touches.length > 0) {
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        isSwipingScreen = true;
-      }
-    }, { passive: false });
-
-    window.addEventListener('touchmove', (e) => {
-      if (!isLooking) return;
-      e.preventDefault();
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        const touch = e.changedTouches[i];
-        if (touch.identifier === lookTouchId) {
-          handleLookMove(touch.clientX, touch.clientY);
-          break;
-        }
-      }
-    }, { passive: false });
-
-    window.addEventListener('touchend', (e) => {
-      if (!isLooking) return;
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === lookTouchId) {
-          handleLookEnd();
-          break;
-        }
-      }
-    });
-
-    lookPad.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      const touch = e.changedTouches[0];
-      handleLookStart(touch.clientX, touch.clientY, touch.identifier);
-    }, { passive: false });
-
-    window.addEventListener('touchmove', (e) => {
-      if (!isLooking) return;
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        const touch = e.changedTouches[i];
-        if (touch.identifier === lookTouchId) {
-          handleLookMove(touch.clientX, touch.clientY);
-          break;
-        }
-      }
-    }, { passive: false });
-
-    window.addEventListener('touchend', (e) => {
-      if (!isLooking) return;
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === lookTouchId) {
-          handleLookEnd();
-          break;
-        }
-      }
-    });
-
-    lookPad.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      handleLookStart(e.clientX, e.clientY);
-    });
-
-    window.addEventListener('mousemove', (e) => {
-      if (isLooking && lookTouchId === null) {
-        handleLookMove(e.clientX, e.clientY);
-      }
-    });
-
-    window.addEventListener('mouseup', () => {
-      if (isLooking && lookTouchId === null) {
-        handleLookEnd();
-      }
-    });
-
-    const studioRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
+    let studioRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
     document.getElementById('hud-code-val').textContent = studioRoomCode;
 
     let currentMode = 'BEDROOM';
@@ -392,7 +220,9 @@
     let diceCountdown = 10;
     let diceCountdownInterval = null;
     let isDiceTimerActive = false;
-
+    let p2JoinCountdown = 10;
+    let p2JoinInterval = null;
+    let isP2JoinTimerActive = false;
     let p1RollVal = null;
     let p2RollVal = null;
     let isDiceRollingP1 = false;
@@ -422,9 +252,7 @@
     const audienceCountEl = document.getElementById('audience-count');
     const countdownPill = document.getElementById('countdown-pill');
     const timerValEl = document.getElementById('timer-val');
-
-    let blueScore = 0;
-    let redScore = 0;
+    const netRoleValEl = document.getElementById('net-role-val');
 
     const contestantRotations = {
       "goody-contestant-1": { yaw: 0, pitch: -0.15 },
@@ -437,7 +265,7 @@
     };
 
     const contestantCities = {
-      "goody-contestant-1": "",
+      "goody-contestant-1": "London",
       "goody-contestant-2": "Nottingham"
     };
 
@@ -465,121 +293,429 @@
 
     const spectatorPlushies = new Map();
 
-    function initSocketConnection() {
-      try {
-        socket = io();
-
-        socket.on('ball_host_assignment', (data) => {
-          isBallPhysicsHost = data.isHost;
-        });
-
-        socket.on('assign_team', (data) => {
-          assignedTeam = data.team;
-          teamColorHex = data.teamColor;
-          plushieColorHex = assignedTeam === 'RED' ? 0xff3838 : 0x00f0ff;
-          if (data.name) {
-            localMyGuestName = data.name;
-          }
-
-          if (localPlushie) {
-            localPlushie.userData.team = assignedTeam;
-            localPlushie.traverse(child => {
-              if (child.isMesh && child.material && child !== localPlushie.userData.badgeMesh) {
-                child.material.color.setHex(plushieColorHex);
-              }
-            });
-            updatePlushieNameBadge(localPlushie, localMyGuestName, teamColorHex);
-          }
-        });
-
-        socket.on('update_player', (data) => {
-          let pMesh = remotePlayers.get(data.id);
-          const remoteTeam = data.team || 'BLUE';
-          const remoteTeamColor = data.teamColor || (remoteTeam === 'RED' ? '#ff3838' : '#00f0ff');
-          const remotePlushieHex = remoteTeam === 'RED' ? 0xff3838 : 0x00f0ff;
-          const playerName = data.name || "Guest";
-
-          if (!pMesh) {
-            pMesh = createCutePlushie(remotePlushieHex, playerName);
-            pMesh.userData.team = remoteTeam;
-            updatePlushieNameBadge(pMesh, playerName, remoteTeamColor);
-            miniDiorama.add(pMesh);
-            remotePlayers.set(data.id, pMesh);
-          } else {
-            pMesh.userData.team = remoteTeam;
-            pMesh.traverse(child => {
-              if (child.isMesh && child.material && child !== localPlushie.userData.badgeMesh) {
-                child.material.color.setHex(remotePlushieHex);
-              }
-            });
-          }
-         
-          pMesh.position.set(data.x, data.y, data.z);
-          pMesh.rotation.y = data.yaw + Math.PI;
-         
-          if (data.name) {
-            updatePlushieNameBadge(pMesh, data.name, remoteTeamColor);
-          }
-         
-          setPlushieVisualMode(pMesh, data.isSolid ? 'opaque' : 'transparent');
-        });
-
-        socket.on('remove_player', (id) => {
-          const pMesh = remotePlayers.get(id);
-          if (pMesh) {
-            if (pMesh.userData && pMesh.userData.badgeMesh) {
-              miniDiorama.remove(pMesh.userData.badgeMesh);
-            }
-            miniDiorama.remove(pMesh);
-            remotePlayers.delete(id);
-          }
-        });
-
-        socket.on('ball_sync', (bData) => {
-          if (ballMesh) {
-            remoteBallTarget.set(bData.x, bData.y, bData.z);
-            if (bData.vx !== undefined) {
-              ballVelocity.set(bData.vx, bData.vy, bData.vz);
-            }
-            hasRemoteBallUpdate = true;
-          }
-        });
-
-        socket.on('score_sync', (sData) => {
-          blueScore = sData.blue;
-          redScore = sData.red;
-          renderPitchScoreboard(blueScore, redScore);
-        });
-
-        socket.on('start_podium_countdown', (data) => {
-          countdownPill.innerHTML = `STATUS: <span style="color:#ffda66;">PODIUM 1 SECURED! 10S PRIORITY COUNTDOWN ACTIVE</span>`;
-        });
-
-        socket.on('unlock_mode_options', () => {
-          if (gameState === "MODE_PROMPT") {
-            isLocalOnPodium1 = true;
-            renderStageQuestionBoard();
-          }
-        });
-
-        socket.on('cancel_podium_countdown', () => {
-          countdownPill.innerHTML = `STATUS: <span style="color:#ffda66;">WALK WAY OUT EAST TO THE GIANT FOOTBALL PITCH!</span>`;
-        });
-      } catch (e) {
-        console.warn("Socket.io offline or unavailable:", e);
+    function updateHudStatusBanner() {
+      if (gameState === "MODE_PROMPT") {
+        countdownPill.innerHTML = `STATUS: <span style="color:#ffda66;">SELECT GAME MODE (STEP ON PODIUM 1)</span>`;
+      } else if (gameState === "WAITING_FOR_P2") {
+        countdownPill.innerHTML = `STATUS: <span style="color:#00f0ff;">WAITING FOR PLAYER 2 (${p2JoinCountdown}s)...</span>`;
+      } else if (gameState === "OPENING_DUEL") {
+        countdownPill.innerHTML = `STATUS: <span style="color:#00f0ff;">OPENING DICE ROLL!</span>`;
+      } else if (gameState === "IN_PLAY") {
+        const label = isSoloMode ? "SOLO RACE ACTIVE!" : (isVsGoodyMode ? "GOODY HEAD-TO-HEAD!" : "2-PLAYER SHOW LIVE!");
+        countdownPill.innerHTML = `STATUS: <span style="color:#39ff14;">${label}</span>`;
+      } else if (gameState === "GAME_OVER") {
+        countdownPill.innerHTML = `STATUS: <span style="color:#ff79b0;">SHOW FINISHED</span>`;
       }
     }
 
-    function triggerImmediateModePrompt() {
-      if (studioPower) return;
-      gameState = "MODE_PROMPT";
-      countdownPill.innerHTML = `STATUS: <span style="color:#ffda66;">SELECT GAME MODE (STEP ON PODIUM 1)</span>`;
-      renderStageQuestionBoard();
+    function pushAuthoritativeState() {
+      if (!isLocalHost || !socket || !socket.connected) return;
+      socket.emit('sync_game_state', {
+        studioRoomCode,
+        studioPower,
+        gameState,
+        isSoloMode,
+        isVsGoodyMode,
+        goodyPlayerSlot,
+        soloPlayerId,
+        activePlayer,
+        p1Index,
+        p2Index,
+        p1RollVal,
+        p2RollVal,
+        isDiceRollingP1,
+        isDiceRollingP2,
+        diceCountdown,
+        isDiceTimerActive,
+        matchTimerSeconds,
+        isTimeExpired,
+        activeQuestion,
+        activeRecap,
+        stageSelectedOption,
+        stageOptionStatus,
+        questionTimer,
+        isQuestionTimerActive,
+        isTieBreakerActive,
+        isDropoutRecoveryPrompt: !!window.isDropoutRecoveryPrompt,
+        p2JoinCountdown,
+        isP2JoinTimerActive,
+        lockedP1SocketId,
+        lockedP2SocketId,
+        p2InviteAttempts,
+        contestantNames
+      });
     }
 
-    function chooseHostGameMode(modeType) {
+    function applySyncedRoomState(state) {
+      if (!state) return;
+      if (state.studioRoomCode) {
+        studioRoomCode = state.studioRoomCode;
+        document.getElementById('hud-code-val').textContent = studioRoomCode;
+      }
+
+      const prevPower = studioPower;
+      studioPower = !!state.studioPower;
+      if (studioPower !== prevPower) {
+        updateStudioLighting(studioPower);
+        updateCameraAlignment();
+      }
+
+      gameState = state.gameState || gameState;
+      isSoloMode = !!state.isSoloMode;
+      isVsGoodyMode = !!state.isVsGoodyMode;
+      goodyPlayerSlot = state.goodyPlayerSlot || null;
+      soloPlayerId = state.soloPlayerId || null;
+      activePlayer = state.activePlayer || activePlayer;
+
+      if (state.contestantNames) {
+        contestantNames["goody-contestant-1"] = state.contestantNames["goody-contestant-1"] || "Player 1";
+        contestantNames["goody-contestant-2"] = state.contestantNames["goody-contestant-2"] || "Player 2";
+        if (typeof pawn1 !== 'undefined') updatePawnNameBadge(pawn1, contestantNames["goody-contestant-1"]);
+        if (typeof pawn2 !== 'undefined') updatePawnNameBadge(pawn2, contestantNames["goody-contestant-2"]);
+      }
+
+      if (typeof state.p1Index === 'number' && typeof pawn1 !== 'undefined') {
+        const prevP1 = p1Index;
+        p1Index = state.p1Index;
+        pawn1.visible = studioPower;
+        if (studioPower && prevP1 !== p1Index) {
+          animatePawnHop(pawn1, prevP1, p1Index, -0.08, null, p1Index === 0 ? 110 : 280);
+        } else if (prevP1 === p1Index && !pawn1.userData.isHopping) {
+          pawn1.position.set(boardTileCoords[p1Index].x - 0.08, 0.52, boardTileCoords[p1Index].z);
+        }
+      }
+
+      if (typeof state.p2Index === 'number' && typeof pawn2 !== 'undefined') {
+        const prevP2 = p2Index;
+        p2Index = state.p2Index;
+        pawn2.visible = studioPower && !isSoloMode;
+        if (window.p2PodiumGroup) window.p2PodiumGroup.visible = !isSoloMode;
+        if (studioPower && !isSoloMode && prevP2 !== p2Index) {
+          animatePawnHop(pawn2, prevP2, p2Index, 0.08, null, p2Index === 0 ? 110 : 280);
+        } else if (prevP2 === p2Index && !pawn2.userData.isHopping) {
+          pawn2.position.set(boardTileCoords[p2Index].x + 0.08, 0.52, boardTileCoords[p2Index].z);
+        }
+      }
+
+      p1RollVal = state.p1RollVal !== undefined ? state.p1RollVal : p1RollVal;
+      p2RollVal = state.p2RollVal !== undefined ? state.p2RollVal : p2RollVal;
+      isDiceRollingP1 = !!state.isDiceRollingP1;
+      isDiceRollingP2 = !!state.isDiceRollingP2;
+      diceCountdown = typeof state.diceCountdown === 'number' ? state.diceCountdown : diceCountdown;
+      isDiceTimerActive = !!state.isDiceTimerActive;
+
+      if (typeof state.matchTimerSeconds === 'number') {
+        matchTimerSeconds = state.matchTimerSeconds;
+        const mins = Math.max(0, Math.floor(matchTimerSeconds / 60)).toString().padStart(2, '0');
+        const secs = Math.max(0, (matchTimerSeconds % 60)).toString().padStart(2, '0');
+        const timeStr = `${mins}:${secs}`;
+        gameClockValEl.textContent = timeStr;
+        if (typeof renderWallClockTexture === 'function') renderWallClockTexture(timeStr);
+      }
+
+      isTimeExpired = !!state.isTimeExpired;
+      activeQuestion = state.activeQuestion || null;
+      activeRecap = state.activeRecap || null;
+      stageSelectedOption = state.stageSelectedOption || null;
+      stageOptionStatus = state.stageOptionStatus || null;
+      questionTimer = typeof state.questionTimer === 'number' ? state.questionTimer : 0;
+      isQuestionTimerActive = !!state.isQuestionTimerActive;
+      isTieBreakerActive = !!state.isTieBreakerActive;
+      window.isDropoutRecoveryPrompt = !!state.isDropoutRecoveryPrompt;
+      p2JoinCountdown = typeof state.p2JoinCountdown === 'number' ? state.p2JoinCountdown : 10;
+      isP2JoinTimerActive = !!state.isP2JoinTimerActive;
+      lockedP1SocketId = state.lockedP1SocketId || null;
+      lockedP2SocketId = state.lockedP2SocketId || null;
+      p2InviteAttempts = typeof state.p2InviteAttempts === 'number' ? state.p2InviteAttempts : 0;
+      updateHudStatusBanner();
+      if (typeof renderStageQuestionBoard === 'function') renderStageQuestionBoard();
+      if (typeof renderBackstageScreens === 'function') renderBackstageScreens();
+    }
+
+    function createRemoteNameBadge(text) {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 64;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = 'rgba(10, 3, 20, 0.85)';
+      ctx.fillRect(4, 4, 248, 56);
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(4, 4, 248, 56);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 26px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText((text || 'GUEST').toUpperCase().slice(0, 12), 128, 33);
+      const tex = new THREE.CanvasTexture(c);
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.65, 0.16), mat);
+      mesh.position.set(0, 0.95, 0);
+      return mesh;
+    }
+
+    function syncRemotePlayersMap(allPlayers) {
+      if (!allPlayers) return;
+      const activeIds = new Set(Object.keys(allPlayers));
+
+      remotePlushies.forEach((entry, id) => {
+        if (!activeIds.has(id)) {
+          miniDiorama.remove(entry.mesh);
+          remotePlushies.delete(id);
+        }
+      });
+
+      Object.values(allPlayers).forEach((pData) => {
+        if (pData.id === selfSocketId) return;
+        let entry = remotePlushies.get(pData.id);
+        if (!entry) {
+          const mesh = createCutePlushie(pData.color || 0xff7675);
+          const tagMesh = createRemoteNameBadge(pData.name);
+          mesh.add(tagMesh);
+          mesh.userData.nameTagMesh = tagMesh;
+          mesh.position.set(pData.x || 0, pData.y || 0.44, pData.z || 0);
+          miniDiorama.add(mesh);
+          entry = {
+            mesh,
+            targetPos: new THREE.Vector3(pData.x || 0, pData.y || 0.44, pData.z || 0),
+            targetYaw: (pData.yaw || 0) + Math.PI
+          };
+          remotePlushies.set(pData.id, entry);
+        } else {
+          entry.targetPos.set(pData.x, pData.y, pData.z);
+          entry.targetYaw = (pData.yaw || 0) + Math.PI;
+        }
+      });
+    }
+
+    function emitLocalPlushiePosition(force = false) {
+      if (!socket || !socket.connected) return;
+      const now = performance.now();
+      if (!force && now - lastEmitMoveTime < 45) return;
+      lastEmitMoveTime = now;
+      socket.emit('player_move', {
+        x: plushiePosition.x,
+        y: plushiePosition.y,
+        z: plushiePosition.z,
+        yaw: plushieRotation.yaw
+      });
+    }
+
+    function resumeShowAfterHostMigration() {
+      if (!isLocalHost) return;
+      if (gameState === "MODE_PROMPT") {
+        triggerImmediateModePrompt();
+      } else if (gameState === "OPENING_DUEL") {
+        beginTenSecondDiceDuel();
+      } else if (gameState === "IN_PLAY") {
+        startTwentyMinuteMatchTimer();
+        if (activeQuestion) {
+          startQuestionCountdown();
+        } else {
+          startTurnCleanly(activePlayer);
+        }
+      }
+    }
+
+    function initSocketMultiplayer() {
+      if (socket) return;
+      const serverUrl = window.location.hostname.includes('onrender.com')
+        ? window.location.origin
+        : 'https://goodyshow247.onrender.com';
+
+      socket = io(serverUrl, { transports: ['websocket', 'polling'] });
+
+      socket.on('connect', () => {
+        selfSocketId = socket.id;
+        emitLocalPlushiePosition(true);
+      });
+
+      socket.on('init_session', (payload) => {
+        selfSocketId = payload.selfId;
+        isLocalHost = !!payload.isHost;
+        netRoleValEl.textContent = isLocalHost ? "LIVE • SHOWRUNNER HOST" : "LIVE • SYNCED GUEST";
+        netRoleValEl.style.color = isLocalHost ? "#39ff14" : "#00f0ff";
+
+        syncRemotePlayersMap(payload.players);
+        applySyncedRoomState(payload.roomState);
+
+        if (isLocalHost) {
+          if (!studioPower && gameState === "MODE_PROMPT") {
+            triggerImmediateModePrompt();
+          } else {
+            resumeShowAfterHostMigration();
+          }
+        }
+      });
+
+      socket.on('host_assigned', (payload) => {
+        isLocalHost = true;
+        netRoleValEl.textContent = "LIVE • SHOWRUNNER HOST";
+        netRoleValEl.style.color = "#39ff14";
+        if (payload && payload.roomState) {
+          applySyncedRoomState(payload.roomState);
+        }
+        resumeShowAfterHostMigration();
+      });
+
+      socket.on('host_changed', (payload) => {
+        isLocalHost = (payload.hostSocketId === selfSocketId);
+        netRoleValEl.textContent = isLocalHost ? "LIVE • SHOWRUNNER HOST" : "LIVE • SYNCED GUEST";
+        netRoleValEl.style.color = isLocalHost ? "#39ff14" : "#00f0ff";
+      });
+
+      socket.on('update_players', (allPlayers) => {
+        syncRemotePlayersMap(allPlayers);
+      });
+
+      socket.on('player_moved', (pData) => {
+        if (!pData || pData.id === selfSocketId) return;
+        let entry = remotePlushies.get(pData.id);
+        if (!entry) {
+          const mesh = createCutePlushie(pData.color || 0xff7675);
+          const tagMesh = createRemoteNameBadge(pData.name);
+          mesh.add(tagMesh);
+          mesh.userData.nameTagMesh = tagMesh;
+          mesh.position.set(pData.x, pData.y, pData.z);
+          miniDiorama.add(mesh);
+          entry = {
+            mesh,
+            targetPos: new THREE.Vector3(pData.x, pData.y, pData.z),
+            targetYaw: (pData.yaw || 0) + Math.PI
+          };
+          remotePlushies.set(pData.id, entry);
+        } else {
+          entry.targetPos.set(pData.x, pData.y, pData.z);
+          entry.targetYaw = (pData.yaw || 0) + Math.PI;
+        }
+      });
+
+      socket.on('player_disconnected', ({ id }) => {
+        const entry = remotePlushies.get(id);
+        if (entry) {
+          miniDiorama.remove(entry.mesh);
+          remotePlushies.delete(id);
+        }
+      });
+
+      socket.on('audience_count', ({ count }) => {
+        audienceCount = Math.max(1, count || 1);
+        audienceCountEl.textContent = audienceCount;
+      });
+
+      socket.on('sync_game_state', (state) => {
+        if (isLocalHost) return;
+        applySyncedRoomState(state);
+      });
+
+      socket.on('host_speak', ({ text }) => {
+        if (isLocalHost || !text) return;
+        speakGoodyLocalOnly(text);
+      });
+
+      socket.on('remote_client_action', (action) => {
+        if (!isLocalHost) return;
+        const sender = action.senderId || null;
+        if (action.type === 'MODE_SELECT' && gameState === "MODE_PROMPT") {
+          chooseHostGameMode(action.modeType, sender);
+        } else if (action.type === 'ROLL_DICE') {
+          if (gameState === "OPENING_DUEL") {
+            if (sender && sender === lockedP1SocketId && p1RollVal === null) {
+              handlePlayerRoll("goody-contestant-1", contestantNames["goody-contestant-1"], Math.floor(Math.random() * 6) + 1);
+            } else if (!isSoloMode && !isVsGoodyMode && sender && sender === lockedP2SocketId && p2RollVal === null) {
+              handlePlayerRoll("goody-contestant-2", contestantNames["goody-contestant-2"], Math.floor(Math.random() * 6) + 1);
+            }
+          } else if (gameState === "IN_PLAY") {
+            const expectedId = activePlayer === "goody-contestant-1" ? lockedP1SocketId : lockedP2SocketId;
+            if (sender && sender === expectedId && !hasPlayerRolledThisTurn && !isPawnMoving && !activeQuestion && !activeRecap) {
+              handlePlayerRoll(activePlayer, contestantNames[activePlayer], Math.floor(Math.random() * 6) + 1);
+            }
+          }
+        } else if (action.type === 'ANSWER_QUESTION' && activeQuestion) {
+          const expectedId = activePlayer === "goody-contestant-1" ? lockedP1SocketId : lockedP2SocketId;
+          const isAllowedAnswerer = isTieBreakerActive
+            ? (sender && (sender === lockedP1SocketId || sender === lockedP2SocketId))
+            : (sender && sender === expectedId);
+          if (!isAllowedAnswerer) return;
+          const optIdx = action.optionIndex;
+          if (optIdx >= 0 && optIdx < activeQuestion.options.length) {
+            const chosenOpt = activeQuestion.options[optIdx];
+            stageSelectedOption = chosenOpt;
+            stageOptionStatus = 'selected';
+            renderStageQuestionBoard();
+            pushAuthoritativeState();
+            setTimeout(() => {
+              evaluateAnswer(activePlayer, chosenOpt);
+            }, 800);
+          }
+        }
+      });
+    }
+
+    function speakGoodyLocalOnly(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 0.95;
+      utter.pitch = 1.25;
+      utter.onstart = () => { isGoodySpeaking = true; };
+      utter.onboundary = (e) => {
+        isGoodySpeaking = true;
+        const chunk = text.substring(e.charIndex, e.charIndex + 65);
+        currentSubtitle = chunk.length > 55 ? chunk.substring(0, 55) + "..." : chunk;
+        playTone(460 + Math.random() * 200, 'triangle', 0.05, 0.02);
+      };
+      utter.onend = () => { isGoodySpeaking = false; };
+      utter.onerror = () => { isGoodySpeaking = false; };
+      window.speechSynthesis.speak(utter);
+    }
+
+    function triggerImmediateModePrompt() {
+      if (studioPower || !isLocalHost) return;
+      gameState = "MODE_PROMPT";
+      updateHudStatusBanner();
+      renderStageQuestionBoard();
+      pushAuthoritativeState();
+
+      setTimeout(() => {
+        if (!isLocalHost || studioPower) return;
+        speakGoody("Welcome to The Goody Tonight Show! Step up to Podium 1 with your plushie avatar to select your game mode: choose 1-Player Solo race, 1-Player versus Goody, or standard 2-Player mode!", () => {
+          if (gameState === "MODE_PROMPT") {
+            connectedDataConns.forEach(c => {
+              if (c.open) c.send({ type: "OFFER_CONTESTANT_CHOICE" });
+            });
+          }
+        });
+      }, 500);
+    }
+
+    function chooseHostGameMode(modeType, requesterSocketId = null) {
       if (studioPower) return;
+      if (modeType === "TWOPLAYER" && p2InviteAttempts >= 2) return;
+
+      if (!isLocalHost) {
+        if (socket && socket.connected) {
+          socket.emit('client_action', { type: 'MODE_SELECT', modeType, senderId: selfSocketId });
+        }
+        return;
+      }
+
+      if (!lockedP1SocketId) {
+        if (requesterSocketId) {
+          lockedP1SocketId = requesterSocketId;
+        } else if (isLocalOnPodium1) {
+          lockedP1SocketId = selfSocketId;
+        } else {
+          const p1PosCheck = new THREE.Vector3(-1.6, 0.44, -2.2);
+          remotePlushies.forEach((entry, id) => {
+            if (!lockedP1SocketId && entry.mesh && entry.mesh.position.distanceTo(p1PosCheck) < 0.75) {
+              lockedP1SocketId = id;
+            }
+          });
+        }
+      }
+
       if (modeType === "SOLO") {
+        recordSessionGameStarted();
         isSoloMode = true;
         isVsGoodyMode = false;
         soloPlayerId = "goody-contestant-1";
@@ -593,12 +729,6 @@
         if (window.p2PodiumGroup) window.p2PodiumGroup.visible = false;
 
         bootStudio();
-       
-        // FIX: Ensure the 20-minute match clock and IN_PLAY state are fully kicked off for Solo mode!
-        gameState = "IN_PLAY";
-        startTwentyMinuteMatchTimer();
-        broadcastBoardState();
-
         const speech = `Welcome to The Goody Tonight Show! We are starting in 1-Player Solo mode with ${soloName}! Let's begin our 20-minute race to tile 32!`;
         speakGoody(speech, () => {
           startTurnCleanly(soloPlayerId);
@@ -618,10 +748,97 @@
         speakGoody(speech, () => {
           beginTenSecondDiceDuel();
         });
+      } else if (modeType === "TWOPLAYER") {
+        isSoloMode = false;
+        isVsGoodyMode = false;
+        window.isDropoutRecoveryPrompt = false;
+        pawn1.visible = true;
+        pawn2.visible = true;
+        if (window.p2PodiumGroup) window.p2PodiumGroup.visible = true;
+
+        const p2PosCheck = new THREE.Vector3(1.6, 0.44, -2.2);
+        let p2Occupied = isLocalOnPodium2 && !isLocalOnPodium1;
+        if (p2Occupied) lockedP2SocketId = selfSocketId;
+        remotePlushies.forEach((entry, id) => {
+          if (entry.mesh && entry.mesh.position.distanceTo(p2PosCheck) < 0.65) {
+            p2Occupied = true;
+            if (!lockedP2SocketId) lockedP2SocketId = id;
+          }
+        });
+
+        bootStudio();
+
+        if (p2Occupied) {
+          const speech = `Welcome to The Goody Tonight Show! Both podiums are occupied! Let's determine who goes first with our opening dice roll!`;
+          speakGoody(speech, () => {
+            beginTenSecondDiceDuel();
+          });
+        } else {
+          startPodium2JoinWait();
+        }
       }
     }
 
+    function stopPodium2JoinWait() {
+      if (p2JoinInterval) {
+        clearInterval(p2JoinInterval);
+        p2JoinInterval = null;
+      }
+      isP2JoinTimerActive = false;
+    }
+
+    function startPodium2JoinWait() {
+      stopPodium2JoinWait();
+      gameState = "WAITING_FOR_P2";
+      p2JoinCountdown = 10;
+      isP2JoinTimerActive = false;
+      updateHudStatusBanner();
+      renderStageQuestionBoard();
+      pushAuthoritativeState();
+
+      const inviteSpeech = `Welcome to The Goody Tonight Show! Player 1 is ready at Podium 1. Someone step onto Podium 2 within 10 seconds to join the battle!`;
+      setTimeout(() => {
+        if (gameState !== "WAITING_FOR_P2" || !isLocalHost) return;
+        speakGoody(inviteSpeech, () => {
+          if (gameState !== "WAITING_FOR_P2" || !isLocalHost) return;
+          p2JoinCountdown = 10;
+          isP2JoinTimerActive = true;
+          renderStageQuestionBoard();
+          pushAuthoritativeState();
+
+          p2JoinInterval = setInterval(() => {
+            if (!isLocalHost || gameState !== "WAITING_FOR_P2") {
+              stopPodium2JoinWait();
+              return;
+            }
+            p2JoinCountdown--;
+            renderStageQuestionBoard();
+            pushAuthoritativeState();
+
+            if (p2JoinCountdown <= 0) {
+              stopPodium2JoinWait();
+              p2InviteAttempts++;
+              window.isDropoutRecoveryPrompt = true;
+              studioPower = false;
+              gameState = "MODE_PROMPT";
+              updateStudioLighting(false);
+              updateCameraAlignment();
+              updateHudStatusBanner();
+              renderStageQuestionBoard();
+              pushAuthoritativeState();
+
+              const timeoutSpeech = p2InviteAttempts >= 2
+                ? "Time is up again! No one stepped onto Podium 2. 2-Player mode is now disabled—choose 1-Player Solo or 1-Player versus Goody!"
+                : "Time is up! Nobody stepped onto Podium 2. All game modes are now unlocked on the studio screen—you have one more chance to try 2-Player mode, or choose Solo or versus Goody!";
+              speakGoody(timeoutSpeech);
+            }
+          }, 1000);
+        });
+      }, 250);
+    }
+
     function broadcastBoardState() {
+      pushAuthoritativeState();
       connectedDataConns.forEach(c => {
         if (c.open) {
           c.send({
@@ -708,6 +925,7 @@
 
       countdownPill.innerHTML = `STATUS: <span style="color:#ff7675;">INTERMISSION: WAITING FOR RECONNECT...</span>`;
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       connectedDataConns.forEach(c => {
         if (c.open) c.send({ type: "INTERMISSION_PAUSE", droppedContestant: contestantId });
@@ -772,6 +990,7 @@
 
       countdownPill.innerHTML = `STATUS: <span style="color:#ffda66;">WAITING FOR ${remainingName.toUpperCase()}'S CHOICE...</span>`;
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       const speech = `Welcome back to The Goody Tonight Show! Unfortunately, we have been unable to find a replacement. So ${remainingName}, you can choose to go solo against the 20-minute timer, or battle me, Goody, head-to-head! Make your choice now!`;
       speakGoody(speech, () => {
@@ -806,6 +1025,7 @@
       if (gameState === "MODE_PROMPT" || savedGameState === "INTRO_SPEECH" || savedGameState === "OPENING_DUEL" || savedGameState === "IDLE") {
         gameState = "OPENING_DUEL";
         renderStageQuestionBoard();
+        pushAuthoritativeState();
         const speech = `A bold choice! You have chosen to battle me, Goody! I am taking over the board! Let's roll our dice to determine who goes first! You have 10 seconds to roll your dice!`;
         speakGoody(speech, () => {
           beginTenSecondDiceDuel();
@@ -868,6 +1088,7 @@
         });
       });
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       const speech = `Resuming on ${country} for ${pName}! Here is your fresh question: ${activeQuestion.q}... You have 30 seconds to lock in!`;
       speakGoody(speech, () => {
@@ -910,6 +1131,7 @@
 
       gameState = "IN_PLAY";
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       broadcastMicState("goody-contestant-1", false);
       broadcastMicState("goody-contestant-2", false);
@@ -932,10 +1154,16 @@
       diceCountdown = 10;
       isDiceTimerActive = true;
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       diceCountdownInterval = setInterval(() => {
+        if (!isLocalHost) {
+          stopDiceCountdown();
+          return;
+        }
         diceCountdown--;
         renderStageQuestionBoard();
+        pushAuthoritativeState();
         if (diceCountdown <= 0) {
           stopDiceCountdown();
           if (onTimeout) onTimeout();
@@ -968,6 +1196,7 @@
 
       renderStageQuestionBoard();
       renderBackstageScreens();
+      pushAuthoritativeState();
 
       connectedDataConns.forEach(c => {
         if (c.open) c.send({
@@ -994,6 +1223,7 @@
 
       renderStageQuestionBoard();
       renderBackstageScreens();
+      pushAuthoritativeState();
       const rollVal = Math.floor(Math.random() * 6) + 1;
       setTimeout(() => {
         handlePlayerRoll(goodyPlayerSlot, "Goody", rollVal);
@@ -1028,6 +1258,7 @@
         stageSelectedOption = chosen;
         stageOptionStatus = 'selected';
         renderStageQuestionBoard();
+        pushAuthoritativeState();
 
         connectedDataConns.forEach(c => {
           if (c.open) {
@@ -1108,18 +1339,16 @@
     const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 150);
     camera.position.set(0, 5.8, -5.0);
 
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 900;
     const canvas = document.getElementById('canvas3d');
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, powerPreference: "high-performance" });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
 
     const canvasPlayer1 = document.createElement('canvas');
     canvasPlayer1.width = 640; canvasPlayer1.height = 360;
-
     const canvasPlayer2 = document.createElement('canvas');
     canvasPlayer2.width = 640; canvasPlayer2.height = 360;
-
     const streamPlayer1 = canvasPlayer1.captureStream(30);
     const streamPlayer2 = canvasPlayer2.captureStream(30);
 
@@ -1253,10 +1482,10 @@
               return;
             }
 
-            const clientName = (conn.metadata && conn.metadata.name) ? conn.metadata.name.trim() : (cId === "goody-contestant-2" ? "Player 2" : "Player 1");
-            const clientCity = (conn.metadata && conn.metadata.city) ? conn.metadata.city.trim() : (cId === "goody-contestant-2" ? "Nottingham" : "");
-            const clientToken = conn.metadata ? conn.metadata.sessionToken : null;
             const cId = conn.metadata ? conn.metadata.contestant : null;
+            const clientName = (conn.metadata && conn.metadata.name) ? conn.metadata.name.trim() : (cId === "goody-contestant-2" ? "Player 2" : "Player 1");
+            const clientCity = (conn.metadata && conn.metadata.city) ? conn.metadata.city.trim() : (cId === "goody-contestant-2" ? "Nottingham" : "London");
+            const clientToken = conn.metadata ? conn.metadata.sessionToken : null;
 
             if (cId === "goody-contestant-1") {
               isP1Connected = true;
@@ -1320,11 +1549,12 @@
                 triggerOnePlayerMode();
               } else if (data.choice === "GOODY") {
                 triggerVsGoodyMode();
+              } else if (data.choice === "TWOPLAYER") {
+                chooseHostGameMode("TWOPLAYER");
               }
             } else if (data.type === "PLAYER_ROLLED_DICE") {
               handlePlayerRoll(data.contestant, data.name, data.roll);
             } else if (data.type === "PLAYER_ANSWERED") {
-              if (data.contestant === goodyPlayerSlot || (activePlayer === goodyPlayerSlot)) return;
               broadcastMicState(data.contestant, false);
 
               if (isTieBreakerActive) {
@@ -1422,6 +1652,9 @@
     }
 
     function speakGoody(text, onComplete) {
+      if (isLocalHost && socket && socket.connected) {
+        socket.emit('host_speak', { text });
+      }
       connectedDataConns.forEach(c => {
         if (c.open) c.send({ type: "HOST_SPEAK", text: text });
       });
@@ -1467,7 +1700,9 @@
     }
 
     function beginTenSecondDiceDuel() {
+      recordSessionGameStarted();
       gameState = "OPENING_DUEL";
+      updateHudStatusBanner();
       renderStageQuestionBoard();
       p1RollVal = null;
       p2RollVal = null;
@@ -1475,6 +1710,7 @@
       isDiceRollingP2 = true;
       isPawnMoving = false;
       hasPlayerRolledThisTurn = false;
+      pushAuthoritativeState();
 
       broadcastMicState("goody-contestant-1", false);
       broadcastMicState("goody-contestant-2", false);
@@ -1491,6 +1727,7 @@
           isDiceRollingP2 = false;
           renderStageQuestionBoard();
           renderBackstageScreens();
+          pushAuthoritativeState();
           setTimeout(finalizeDiceDuel, 1200);
         }
       });
@@ -1508,6 +1745,7 @@
         playTone(587, 'sine', 0.15, 0.08);
         renderStageQuestionBoard();
         renderBackstageScreens();
+        pushAuthoritativeState();
 
         if ((isSoloMode && p1RollVal !== null) || (p1RollVal !== null && p2RollVal !== null)) {
           stopDiceCountdown();
@@ -1522,7 +1760,7 @@
         stopDiceCountdown();
         hasPlayerRolledThisTurn = true;
         isPawnMoving = true;
-       
+
         if (contestant === "goody-contestant-2") {
           p2RollVal = roll; isDiceRollingP2 = false;
         } else {
@@ -1531,6 +1769,7 @@
         playTone(587, 'sine', 0.15, 0.08);
         renderStageQuestionBoard();
         renderBackstageScreens();
+        pushAuthoritativeState();
 
         setTimeout(() => {
           const speech = contestant === goodyPlayerSlot
@@ -1547,15 +1786,20 @@
     function startTwentyMinuteMatchTimer() {
       if (matchTimerInterval) clearInterval(matchTimerInterval);
       matchTimerInterval = setInterval(() => {
+        if (!isLocalHost) {
+          clearInterval(matchTimerInterval);
+          return;
+        }
         if (gameState !== "IN_PLAY") return;
         matchTimerSeconds--;
 
         const mins = Math.max(0, Math.floor(matchTimerSeconds / 60)).toString().padStart(2, '0');
         const secs = Math.max(0, (matchTimerSeconds % 60)).toString().padStart(2, '0');
         const timeStr = `${mins}:${secs}`;
-       
+
         gameClockValEl.textContent = timeStr;
         renderWallClockTexture(timeStr);
+        pushAuthoritativeState();
 
         connectedDataConns.forEach(c => {
           if (c.open) c.send({ type: "SYNC_MATCH_TIMER", timeStr: timeStr, secondsLeft: matchTimerSeconds });
@@ -1564,6 +1808,7 @@
         if (matchTimerSeconds <= 0) {
           clearInterval(matchTimerInterval);
           isTimeExpired = true;
+          pushAuthoritativeState();
           if (!activeQuestion && !activeRecap && !isTieBreakerActive) {
             evaluateFinalShowdown();
           }
@@ -1595,6 +1840,7 @@
       gameState = "IN_PLAY";
       hasPlayerRolledThisTurn = false;
       isPawnMoving = true;
+      updateHudStatusBanner();
       renderStageQuestionBoard();
       renderBackstageScreens();
       startTwentyMinuteMatchTimer();
@@ -1607,7 +1853,12 @@
     }
 
     function animatePawnHop(pawn, fromIdx, toIdx, offsetX, onComplete, hopDurationMs = 280) {
+      const hopToken = (pawn.userData.hopToken || 0) + 1;
+      pawn.userData.hopToken = hopToken;
+      pawn.userData.isHopping = true;
+
       if (fromIdx === toIdx) {
+        pawn.userData.isHopping = false;
         if (onComplete) onComplete();
         return;
       }
@@ -1616,12 +1867,15 @@
       let currentHopIdx = fromIdx;
 
       function hopNextStep() {
+        if (pawn.userData.hopToken !== hopToken) return;
         if (gameState === "INTERMISSION") {
+          pawn.userData.isHopping = false;
           isPawnMoving = false;
           return;
         }
 
         if (currentHopIdx === toIdx) {
+          pawn.userData.isHopping = false;
           if (onComplete) onComplete();
           return;
         }
@@ -1642,7 +1896,9 @@
         playTone(320 + Math.random() * 80, 'sine', 0.06, 0.04);
 
         function stepFrame(now) {
+          if (pawn.userData.hopToken !== hopToken) return;
           if (gameState === "INTERMISSION") {
+            pawn.userData.isHopping = false;
             isPawnMoving = false;
             return;
           }
@@ -1697,7 +1953,7 @@
         const landedCountry = boardTileCoords[currentTileIdx].country;
         const qPool = COUNTRY_QUESTIONS[landedCountry] || COUNTRY_QUESTIONS["UK"];
         const rawQ = qPool[Math.floor(Math.random() * qPool.length)];
-       
+
         activeQuestion = {
           country: landedCountry,
           text: rawQ.q,
@@ -1726,6 +1982,7 @@
           });
         });
         renderStageQuestionBoard();
+        pushAuthoritativeState();
 
         const speech = activePlayer === goodyPlayerSlot
           ? `I landed on ${landedCountry}! Here is my question: ${activeQuestion.q}... Let me process this in my circuits!`
@@ -1755,9 +2012,14 @@
       questionTimer = 30;
       isQuestionTimerActive = true;
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       if (questionInterval) clearInterval(questionInterval);
       questionInterval = setInterval(() => {
+        if (!isLocalHost) {
+          clearInterval(questionInterval);
+          return;
+        }
         if (gameState === "INTERMISSION") {
           clearInterval(questionInterval);
           isQuestionTimerActive = false;
@@ -1765,6 +2027,7 @@
         }
         questionTimer--;
         renderStageQuestionBoard();
+        pushAuthoritativeState();
         if (questionTimer <= 0) {
           clearInterval(questionInterval);
           isQuestionTimerActive = false;
@@ -1804,6 +2067,7 @@
       activeRecap = { country: activeQuestion.country, text: activeQuestion.recap, isCorrect };
       activeQuestion = null;
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       const isGoody = contestant === goodyPlayerSlot;
       if (isCorrect) {
@@ -1855,6 +2119,7 @@
       activeRecap = { country: activeQuestion.country, text: activeQuestion.recap, isCorrect: false };
       activeQuestion = null;
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       speakGoody(`I'm sorry, you ran out of time! You must go back to the start! Here is what we learned: ${activeRecap.text}`, () => {
         resetPlayerToStart(contestant, () => {
@@ -1869,11 +2134,8 @@
       activeQuestion = null;
       isQuestionTimerActive = false;
       questionTimer = 0;
-      hasPlayerRolledThisTurn = false;
-      isPawnMoving = false;
-      stageSelectedOption = null;
-      stageOptionStatus = null;
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       if (isTimeExpired) {
         setTimeout(() => evaluateFinalShowdown(), 2000);
@@ -1901,16 +2163,14 @@
     }
 
     function nextTurn() {
-      if (gameState !== "IN_PLAY") return;
+      if (gameState !== "IN_PLAY" || !isLocalHost) return;
 
       stopDiceCountdown();
 
       if (isSoloMode) {
         activePlayer = soloPlayerId;
-      } else if (isVsGoodyMode) {
-        activePlayer = (activePlayer === "goody-contestant-1") ? "goody-contestant-2" : "goody-contestant-1";
       } else {
-        activePlayer = (activePlayer === "goody-contestant-1") ? "goody-contestant-2" : "goody-contestant-1";
+        activePlayer = activePlayer === "goody-contestant-1" ? "goody-contestant-2" : "goody-contestant-1";
       }
 
       const pName = contestantNames[activePlayer];
@@ -1931,6 +2191,7 @@
       questionTimer = 0;
       renderStageQuestionBoard();
       renderBackstageScreens();
+      pushAuthoritativeState();
 
       if (activePlayer === goodyPlayerSlot) {
         speakGoody(`It is my turn! Goody is rolling the dice!`, () => {
@@ -1955,6 +2216,8 @@
 
       if (isSoloMode) {
         gameState = "GAME_OVER";
+        updateHudStatusBanner();
+        pushAuthoritativeState();
         const soloName = contestantNames[soloPlayerId];
         const speech = `The 20-minute timer has expired! Unfortunately, ${soloName} was unable to complete the board in time! Tonight's prize rolls over. Goodnight everyone!`;
         speakGoody(speech);
@@ -1964,6 +2227,8 @@
 
       if (p1Index === 0 && p2Index === 0) {
         gameState = "GAME_OVER";
+        updateHudStatusBanner();
+        pushAuthoritativeState();
         const speech = "The 20-minute show timer has run out, and both contestants are still on the starting square! Nobody wins tonight. Goodnight everyone!";
         speakGoody(speech);
         broadcastGameOver("NOBODY", "ROLLOVER_START_SQUARE");
@@ -1976,6 +2241,8 @@
       }
 
       gameState = "GAME_OVER";
+      updateHudStatusBanner();
+      pushAuthoritativeState();
       const winner = p1Index > p2Index ? contestantNames["goody-contestant-1"] : contestantNames["goody-contestant-2"];
       const loser = p1Index > p2Index ? contestantNames["goody-contestant-2"] : contestantNames["goody-contestant-1"];
 
@@ -1983,7 +2250,7 @@
       speakGoody(speech);
       broadcastGameOver(winner, "TIME_EXPIRED_LEADER");
     }
-   
+
     function triggerTieBreakerDuel() {
       isTieBreakerActive = true;
       tieBreakerAnswered = false;
@@ -2002,6 +2269,7 @@
       stageSelectedOption = null;
       stageOptionStatus = null;
       renderStageQuestionBoard();
+      pushAuthoritativeState();
 
       speakGoody("We have a dead heat draw! Both contestants finished on the exact same tile! We are going to a sudden death tie-breaker question!", () => {
         connectedDataConns.forEach(c => {
@@ -2036,6 +2304,8 @@
       renderStageQuestionBoard();
 
       gameState = "GAME_OVER";
+      updateHudStatusBanner();
+      pushAuthoritativeState();
       const winner = isCorrect ? answeringName : opponentName;
       const loser = isCorrect ? opponentName : answeringName;
 
@@ -2060,6 +2330,8 @@
 
     function triggerFinishLineVictory(winnerName, loserName) {
       gameState = "GAME_OVER";
+      updateHudStatusBanner();
+      pushAuthoritativeState();
       if (matchTimerInterval) clearInterval(matchTimerInterval);
       if (questionInterval) clearInterval(questionInterval);
       stopDiceCountdown();
@@ -2077,6 +2349,10 @@
     }
 
     function broadcastGameOver(winnerName, reason) {
+      lockedP1SocketId = null;
+      lockedP2SocketId = null;
+      p2InviteAttempts = 0;
+      pushAuthoritativeState();
       connectedDataConns.forEach(c => {
         if (c.open) c.send({ type: "GAME_OVER", winner: winnerName, reason: reason });
       });
@@ -2104,14 +2380,14 @@
     function createDownFacingSpotlight(colorHex, x, y, z) {
       const fixGroup = new THREE.Group(); fixGroup.position.set(x, y, z);
       const headPivot = new THREE.Group();
-      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.55, 16), new THREE.MeshStandardMaterial({ color: 0x15151e }));
+      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.55, 12), new THREE.MeshLambertMaterial({ color: 0x15151e }));
       can.rotation.x = Math.PI / 2; headPivot.add(can);
-      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.19, 16), new THREE.MeshBasicMaterial({ color: 0x050505 }));
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.19, 12), new THREE.MeshBasicMaterial({ color: 0x050505 }));
       lens.position.set(0, 0, 0.28); headPivot.add(lens);
-      const spot = new THREE.SpotLight(colorHex, 0, 18, Math.PI / 3.4, 0.35);
-      spot.position.set(0, 0, 0.28); headPivot.add(spot);
-      const targetObj = new THREE.Object3D(); targetObj.position.set(x * 0.4, -4.5, -0.8);
-      scene.add(targetObj); spot.target = targetObj;
+      const spot = new THREE.PointLight(colorHex, 0, 14);
+      spot.position.set(x * 0.4, -3.5, -0.8);
+      scene.add(spot);
+      const targetObj = { position: spot.position };
       headPivot.rotation.x = Math.PI * 0.35;
       fixGroup.add(headPivot); trussGroup.add(fixGroup);
       return { spot, lens, color: colorHex, target: targetObj };
@@ -2134,233 +2410,61 @@
     }
 
     const miniDiorama = new THREE.Group(); miniDiorama.position.set(0, 3.95, -9);
+
+    // --- GRAND CINEMA THEATER HUB ---
+    const cinemaHubGroup = new THREE.Group();
+    cinemaHubGroup.position.set(0, 0, -10);
+    scene.add(cinemaHubGroup);
+
+    // Tiered Seating Rows (Amphitheater steps)
+    for (let r = 0; r < 6; r++) {
+      const tierRadius = 7 + (r * 1.8);
+      const tierStep = new THREE.Mesh(
+        new THREE.CylinderGeometry(tierRadius, tierRadius + 1.6, 0.35, 32, 1, true, -Math.PI * 0.75, Math.PI * 1.5),
+        new THREE.MeshStandardMaterial({ color: 0x1b0c30, roughness: 0.5, metalness: 0.2 })
+      );
+      tierStep.position.set(0, 0.2 + (r * 0.32), 4);
+      cinemaHubGroup.add(tierStep);
+    }
+
+    // Giant Front Cinema Screen
+    const bigCinemaCanvas = document.createElement('canvas');
+    bigCinemaCanvas.width = 1024; bigCinemaCanvas.height = 512;
+    const bigCtx = bigCinemaCanvas.getContext('2d');
+    const bigScreenTex = new THREE.CanvasTexture(bigCinemaCanvas);
+    const plushiePosition = new THREE.Vector3(0, 0.44, 9.5);
+
+    function renderBigCinemaScreen() {
+      bigCtx.fillStyle = '#05020a';
+      bigCtx.fillRect(0, 0, 1024, 512);
+      bigCtx.strokeStyle = '#00f0ff';
+      bigCtx.lineWidth = 8;
+      bigCtx.strokeRect(12, 12, 1000, 488);
+
+      bigCtx.fillStyle = '#ffda66';
+      bigCtx.font = 'bold 42px monospace';
+      bigCtx.textAlign = 'center';
+      bigCtx.fillText("THE GOODY CINEMAS • GRAND AUDITORIUM", 512, 180);
+
+      bigCtx.fillStyle = '#39ff14';
+      bigCtx.font = 'bold 24px monospace';
+      bigCtx.fillText("WALK DOWN THE AISLE TO PODIUM 1 TO START SHOW", 512, 260);
+      bigScreenTex.needsUpdate = true;
+    }
+    renderBigCinemaScreen();
+
+    const bigScreenMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(14, 7),
+      new THREE.MeshBasicMaterial({ map: bigScreenTex })
+    );
+    bigScreenMesh.position.set(0, 5.2, -5.5);
+    cinemaHubGroup.add(bigScreenMesh);
     const feltCarpet = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48), new THREE.MeshStandardMaterial({ color: 0x271147 }));
     feltCarpet.position.y = 0.44;
     miniDiorama.add(feltCarpet);
 
-    const miniWall = new THREE.Mesh(
-      new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, 0, Math.PI * 2),
-      new THREE.MeshStandardMaterial({ color: 0x15092a, side: THREE.BackSide })
-    );
-    miniWall.position.y = 2.65;
-    miniDiorama.add(miniWall);
-
-    const enclosingWallsGroup = new THREE.Group();
-    enclosingWallsGroup.position.set(0, 0.44, 0.0);
-
-    const studioWallMat = new THREE.MeshStandardMaterial({
-      color: 0x1f113a,
-      roughness: 0.3,
-      metalness: 0.4,
-      side: THREE.DoubleSide,
-      transparent: false
-    });
-
-    const westWall = new THREE.Mesh(new THREE.BoxGeometry(0.6, 5.0, 14.0), studioWallMat);
-    westWall.position.set(-7.0, 2.5, 0.0);
-    enclosingWallsGroup.add(westWall);
-
-    const northWall = new THREE.Mesh(new THREE.BoxGeometry(17.0, 5.0, 0.6), studioWallMat);
-    northWall.position.set(1.5, 2.5, -7.0);
-    enclosingWallsGroup.add(northWall);
-
-    const southWall = new THREE.Mesh(new THREE.BoxGeometry(17.0, 5.0, 0.6), studioWallMat);
-    southWall.position.set(1.5, 2.5, 7.0);
-    enclosingWallsGroup.add(southWall);
-
-    miniDiorama.add(enclosingWallsGroup);
-
-    const partitionGroup = new THREE.Group();
-    partitionGroup.position.set(10.0, 0.44, 0.0);
-
-    const wallMaterial = new THREE.MeshStandardMaterial({
-      color: 0x1f113a,
-      roughness: 0.3,
-      metalness: 0.4,
-      transparent: false,
-      opacity: 1.0,
-      side: THREE.DoubleSide
-    });
-
-    // Kept original positions and widths, just made them tall (height 25.0, centered at y = 12.5)
-    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 25.0, 4.5), wallMaterial);
-    leftWall.position.set(0, 12.5, -7.75);
-    partitionGroup.add(leftWall);
-
-    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 25.0, 12.5), wallMaterial);
-    rightWall.position.set(0, 12.5, 3.75);
-    partitionGroup.add(rightWall);
-
-    const gateGroup = new THREE.Group();
-    gateGroup.position.set(0, 0, -4.0);
-
-    const gateMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.3, 25.0, 3.0),
-      new THREE.MeshStandardMaterial({
-        color: 0x050505,
-        roughness: 0.1,
-        metalness: 0.85,
-        emissive: 0x111115,
-        emissiveIntensity: 0.2,
-        side: THREE.DoubleSide
-      })
-    );
-    gateMesh.position.set(0, 12.5, 0);
-    gateGroup.add(gateMesh);
-    partitionGroup.add(gateGroup);
-
-    miniDiorama.add(partitionGroup);
-
-    const pitchSbCanvas = document.createElement('canvas');
-    pitchSbCanvas.width = 1024;
-    pitchSbCanvas.height = 512;
-    const pitchSbCtx = pitchSbCanvas.getContext('2d');
-    const pitchSbTexture = new THREE.CanvasTexture(pitchSbCanvas);
-    pitchSbTexture.minFilter = THREE.LinearFilter;
-
-    const pitchBoardGeo = new THREE.PlaneGeometry(12, 6);
-    const pitchBoardMat = new THREE.MeshBasicMaterial({
-      map: pitchSbTexture,
-      side: THREE.DoubleSide
-    });
-
-    const pitchScoreboardMesh = new THREE.Mesh(pitchBoardGeo, pitchBoardMat);
-    pitchScoreboardMesh.position.set(34.0, 3.5, 14.0);
-    pitchScoreboardMesh.rotation.y = Math.PI;
-    miniDiorama.add(pitchScoreboardMesh);
-
-    function renderPitchScoreboard(blue, red) {
-      pitchSbCtx.fillStyle = '#05020a';
-      pitchSbCtx.fillRect(0, 0, 1024, 512);
-
-      pitchSbCtx.strokeStyle = '#00f0ff';
-      pitchSbCtx.lineWidth = 10;
-      pitchSbCtx.strokeRect(10, 10, 1004, 492);
-
-      pitchSbCtx.fillStyle = '#ffda66';
-      pitchSbCtx.font = 'bold 44px monospace';
-      pitchSbCtx.textAlign = 'center';
-      pitchSbCtx.fillText('★ PLUSHIE RUGBY-FOOTIE ARENA ★', 512, 85);
-
-      pitchSbCtx.fillStyle = 'rgba(0, 240, 255, 0.15)';
-      pitchSbCtx.fillRect(80, 140, 400, 300);
-      pitchSbCtx.strokeStyle = '#00f0ff';
-      pitchSbCtx.lineWidth = 4;
-      pitchSbCtx.strokeRect(80, 140, 400, 300);
-
-      pitchSbCtx.fillStyle = '#00f0ff';
-      pitchSbCtx.font = 'bold 36px monospace';
-      pitchSbCtx.fillText('BLUE TEAM', 280, 195);
-
-      pitchSbCtx.fillStyle = '#ffffff';
-      pitchSbCtx.font = 'bold 96px monospace';
-      pitchSbCtx.fillText(blue, 280, 330);
-
-      pitchSbCtx.fillStyle = 'rgba(255, 56, 56, 0.15)';
-      pitchSbCtx.fillRect(544, 140, 400, 300);
-      pitchSbCtx.strokeStyle = '#ff3838';
-      pitchSbCtx.lineWidth = 4;
-      pitchSbCtx.strokeRect(544, 140, 400, 300);
-
-      pitchSbCtx.fillStyle = '#ff3838';
-      pitchSbCtx.font = 'bold 36px monospace';
-      pitchSbCtx.fillText('RED TEAM', 744, 195);
-
-      pitchSbCtx.fillStyle = '#ffffff';
-      pitchSbCtx.font = 'bold 96px monospace';
-      pitchSbCtx.fillText(red, 744, 330);
-
-      pitchSbTexture.needsUpdate = true;
-    }
-
-    renderPitchScoreboard(0, 0);
-
-    const foosballGroup = new THREE.Group();
-    foosballGroup.position.set(34.0, 0.44, 0.0);
-
-    const arenaLength = 36.0;
-    const arenaWidth = 24.0;
-
-    const turfMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(arenaLength, 0.06, arenaWidth),
-      new THREE.MeshStandardMaterial({ color: 0x27ae60, roughness: 0.8 })
-    );
-    turfMesh.position.y = 0.03;
-    foosballGroup.add(turfMesh);
-
-    const pitchLinesMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const centerLine = new THREE.Mesh(new THREE.PlaneGeometry(0.08, arenaWidth - 0.2), pitchLinesMat);
-    centerLine.rotation.x = -Math.PI / 2;
-    centerLine.position.y = 0.065;
-    foosballGroup.add(centerLine);
-
-    const centerCircle = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.1, 32), pitchLinesMat);
-    centerCircle.rotation.x = -Math.PI / 2;
-    centerCircle.position.y = 0.066;
-    foosballGroup.add(centerCircle);
-
-    const arenaWallMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, emissive: 0x004466, metalness: 0.8, roughness: 0.2 });
-    const halfLen = arenaLength / 2;
-    const halfWid = arenaWidth / 2;
-
-    const wallNorth = new THREE.Mesh(new THREE.BoxGeometry(arenaLength + 0.4, 0.6, 0.3), arenaWallMat);
-    wallNorth.position.set(0, 0.3, halfWid + 0.15);
-    foosballGroup.add(wallNorth);
-
-    const wallSouth = new THREE.Mesh(new THREE.BoxGeometry(arenaLength + 0.4, 0.6, 0.3), arenaWallMat);
-    wallSouth.position.set(0, 0.3, -(halfWid + 0.15));
-    foosballGroup.add(wallSouth);
-
-    function createVibrantGoal(isLeft) {
-      const goalGroup = new THREE.Group();
-      const postMat = new THREE.MeshStandardMaterial({ color: isLeft ? 0x00f0ff : 0xff3838, metalness: 0.8, roughness: 0.2 });
-     
-      const goalSpan = 5.0;
-      const post1 = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 3.0, 16), postMat);
-      post1.position.set(0, 1.5, goalSpan / 2);
-      goalGroup.add(post1);
-
-      const post2 = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 3.0, 16), postMat);
-      post2.position.set(0, 1.5, -goalSpan / 2);
-      goalGroup.add(post2);
-
-      const crossbar = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, goalSpan, 16), postMat);
-      crossbar.rotation.z = Math.PI / 2;
-      crossbar.position.set(0, 3.0, 0);
-      goalGroup.add(crossbar);
-
-      const up1 = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 4.5, 16), postMat);
-      up1.position.set(0, 5.25, goalSpan / 2);
-      goalGroup.add(up1);
-
-      const up2 = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 4.5, 16), postMat);
-      up2.position.set(0, 5.25, -goalSpan / 2);
-      goalGroup.add(up2);
-
-      const netMat = new THREE.MeshBasicMaterial({ color: isLeft ? 0x00ffff : 0xff79b0, wireframe: true, transparent: true, opacity: 0.7 });
-      const netBox = new THREE.Mesh(new THREE.BoxGeometry(1.6, 3.0, goalSpan), netMat);
-      netBox.position.set(-0.8, 1.5, 0);
-      goalGroup.add(netBox);
-
-      goalGroup.position.set(isLeft ? -halfLen : halfLen, 0, 0);
-      if (!isLeft) goalGroup.rotation.y = Math.PI;
-      return goalGroup;
-    }
-
-    foosballGroup.add(createVibrantGoal(true));
-    foosballGroup.add(createVibrantGoal(false));
-    miniDiorama.add(foosballGroup);
-
-    const ballMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.38, 24, 24),
-      new THREE.MeshStandardMaterial({ color: 0xffda66, emissive: 0x443300, roughness: 0.3, metalness: 0.5 })
-    );
-    ballMesh.position.set(34.0, 0.82, 0.0);
-    miniDiorama.add(ballMesh);
-
-    let ballVelocity = new THREE.Vector3(0, 0, 0);
-    const remoteBallTarget = new THREE.Vector3(34.0, 0.82, 0.0);
-    let hasRemoteBallUpdate = false;
+    const miniWall = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI / 2, Math.PI), new THREE.MeshStandardMaterial({ color: 0x15092a, side: THREE.BackSide }));
+    miniWall.position.y = 2.65; miniDiorama.add(miniWall);
 
     const p1PodiumGroup = new THREE.Group();
     const p1PodiumBase = new THREE.Mesh(
@@ -2423,10 +2527,10 @@
     renderWallClockTexture("20:00");
 
     const wallClockMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.2, 1.1),
+      new THREE.PlaneGeometry(2.4, 1.2),
       new THREE.MeshBasicMaterial({ map: wallClockTex })
     );
-    wallClockMesh.position.set(4.2, 2.15, -4.4);
+    wallClockMesh.position.set(4.8, 2.05, -3.2);
     wallClockMesh.rotation.y = -0.75;
     miniDiorama.add(wallClockMesh);
 
@@ -2594,7 +2698,7 @@
       let fontSize = 48;
       if (cleanName.length > 8) fontSize = 36;
       if (cleanName.length > 12) fontSize = 28;
-     
+
       ctx.font = `bold ${fontSize}px sans-serif`;
       ctx.fillText(cleanName, w / 2, h / 2 + 2);
 
@@ -2744,41 +2848,93 @@
         qBoardCtx.fillStyle = '#ffda66';
         qBoardCtx.font = 'bold 24px sans-serif';
         qBoardCtx.textAlign = 'center';
-        qBoardCtx.fillText("CHOOSE GAME MODE", 256, 45);
+        qBoardCtx.fillText(window.isDropoutRecoveryPrompt ? "PLAYER LEFT - CHOOSE NEXT MODE" : "CHOOSE GAME MODE", 256, 50);
 
         qBoardCtx.fillStyle = '#00f0ff';
-        qBoardCtx.fillRect(36, 60, 440, 2);
+        qBoardCtx.fillRect(36, 66, 440, 2);
 
-        if (!isLocalOnPodium1) {
+        const cooldownSecs = getPodiumCooldownRemaining();
+        const limitReached = !window.isDropoutRecoveryPrompt && hasReachedSessionGameLimit();
+        const canInteractPrompt = !limitReached && (cooldownSecs === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
+
+        if (limitReached && (isLocalOnPodium1 || isLocalOnPodium2)) {
+          qBoardCtx.fillStyle = '#ff7675';
+          qBoardCtx.font = 'bold 20px sans-serif';
+          qBoardCtx.fillText("SESSION LIMIT REACHED (2/2 GAMES)", 256, 155);
+
+          qBoardCtx.fillStyle = '#ffda66';
+          qBoardCtx.font = 'bold 16px monospace';
+          qBoardCtx.fillText("ENJOY WATCHING FROM THE AUDIENCE!", 256, 200);
+        } else if (cooldownSecs > 0 && (isLocalOnPodium1 || isLocalOnPodium2)) {
+          qBoardCtx.fillStyle = '#ff7675';
+          qBoardCtx.font = 'bold 20px sans-serif';
+          qBoardCtx.fillText("ANTI-TROLL PODIUM COOLDOWN ACTIVE", 256, 155);
+
+          qBoardCtx.fillStyle = '#ffda66';
+          qBoardCtx.font = 'bold 34px monospace';
+          qBoardCtx.fillText(`WAIT ${cooldownSecs}s TO RE-CLAIM`, 256, 205);
+        } else if (!canInteractPrompt) {
           qBoardCtx.fillStyle = '#ff7675';
           qBoardCtx.font = 'bold 16px sans-serif';
           qBoardCtx.fillText("STEP ON PODIUM 1 WITH YOUR PLUSHIE TO UNLOCK!", 256, 180);
         } else {
-          qBoardCtx.fillStyle = '#ffffff';
-          qBoardCtx.font = '14px sans-serif';
-          qBoardCtx.fillText("SELECT START MODE (TAP OR PRESS 1-2):", 256, 85);
+          const allowSoloAndGoody = !!window.isDropoutRecoveryPrompt;
 
-          qBoardCtx.fillStyle = '#3498db';
-          qBoardCtx.fillRect(40, 102, 432, 55);
           qBoardCtx.fillStyle = '#ffffff';
-          qBoardCtx.font = 'bold 16px monospace';
-          qBoardCtx.fillText("[1] 1-PLAYER SOLO RACE", 256, 134);
+          qBoardCtx.font = '15px sans-serif';
+          qBoardCtx.fillText(allowSoloAndGoody ? "ALL MODES UNLOCKED (TAP OR PRESS 1-3):" : "INITIAL START: SELECT 2-PLAYER MODE:", 256, 105);
 
-          qBoardCtx.fillStyle = '#e74c3c';
-          qBoardCtx.fillRect(40, 168, 432, 55);
-          qBoardCtx.fillStyle = '#ffffff';
+          qBoardCtx.fillStyle = allowSoloAndGoody ? '#3498db' : '#2c3e50';
+          qBoardCtx.fillRect(40, 125, 432, 42);
+          qBoardCtx.fillStyle = allowSoloAndGoody ? '#ffffff' : '#7f8c8d';
           qBoardCtx.font = 'bold 16px monospace';
-          qBoardCtx.fillText("[2] 1-PLAYER VS GOODY", 256, 200);
+          qBoardCtx.fillText(allowSoloAndGoody ? "[1] 1-PLAYER SOLO RACE" : "[1] 1-PLAYER SOLO (LOCKED AT START)", 256, 152);
 
-          qBoardCtx.fillStyle = '#2d2d3d';
-          qBoardCtx.fillRect(40, 234, 432, 55);
-          qBoardCtx.fillStyle = '#7f8c8d';
+          qBoardCtx.fillStyle = allowSoloAndGoody ? '#e74c3c' : '#2c3e50';
+          qBoardCtx.fillRect(40, 178, 432, 42);
+          qBoardCtx.fillStyle = allowSoloAndGoody ? '#ffffff' : '#7f8c8d';
           qBoardCtx.font = 'bold 16px monospace';
-          qBoardCtx.fillText("[3] 2-PLAYER MODE [DISABLED]", 256, 266);
+          qBoardCtx.fillText(allowSoloAndGoody ? "[2] 1-PLAYER VS GOODY" : "[2] 1-PLAYER VS GOODY (LOCKED)", 256, 205);
+
+          const allowTwoPlayer = p2InviteAttempts < 2;
+          qBoardCtx.fillStyle = allowTwoPlayer ? '#9b59b6' : '#2c3e50';
+          qBoardCtx.fillRect(40, 231, 432, 42);
+          qBoardCtx.fillStyle = allowTwoPlayer ? '#ffffff' : '#7f8c8d';
+          qBoardCtx.font = 'bold 16px monospace';
+          qBoardCtx.fillText(allowTwoPlayer ? "[3] 2-PLAYER MODE" : "[3] 2-PLAYER MODE (DISABLED)", 256, 258);
 
           qBoardCtx.fillStyle = '#39ff14';
           qBoardCtx.font = 'bold 13px monospace';
-          qBoardCtx.fillText("TAP ANY ACTIVE OPTION OR USE 1, 2", 256, 325);
+          const hintTxt = !allowTwoPlayer
+            ? "TAP [1] SOLO OR [2] VS GOODY"
+            : (allowSoloAndGoody ? "TAP ANY OPTION OR PRESS 1, 2, 3" : "TAP [3] OR PRESS 3 TO START 2-PLAYER");
+          qBoardCtx.fillText(hintTxt, 256, 315);
+        }
+      } else if (gameState === "WAITING_FOR_P2") {
+        qBoardCtx.fillStyle = '#ffda66';
+        qBoardCtx.font = 'bold 23px sans-serif';
+        qBoardCtx.textAlign = 'center';
+        qBoardCtx.fillText("2-PLAYER MODE SELECTED", 256, 52);
+
+        qBoardCtx.fillStyle = '#00f0ff';
+        qBoardCtx.fillRect(36, 68, 440, 2);
+
+        qBoardCtx.fillStyle = '#ffffff';
+        qBoardCtx.font = 'bold 17px sans-serif';
+        qBoardCtx.fillText("STEP ONTO PODIUM 2 TO JOIN THE SHOW!", 256, 125);
+
+        if (isP2JoinTimerActive) {
+          qBoardCtx.fillStyle = '#ff7675';
+          qBoardCtx.font = 'bold 54px monospace';
+          qBoardCtx.fillText(`${p2JoinCountdown}s`, 256, 205);
+
+          qBoardCtx.fillStyle = '#39ff14';
+          qBoardCtx.font = 'bold 14px monospace';
+          qBoardCtx.fillText("WAITING FOR CONTESTANT 2...", 256, 260);
+        } else {
+          qBoardCtx.fillStyle = '#00f0ff';
+          qBoardCtx.font = 'bold 16px monospace';
+          qBoardCtx.fillText("LISTEN TO GOODY'S ANNOUNCEMENT...", 256, 195);
         }
       } else if (gameState === "OPENING_DUEL") {
         qBoardCtx.fillStyle = '#ffda66';
@@ -2883,12 +3039,7 @@
         qBoardCtx.textAlign = 'left';
         qBoardCtx.fillText(` ${activeQuestion.country.toUpperCase()} [${pName}]`, 20, 36);
 
-        if (activePlayer === goodyPlayerSlot) {
-          qBoardCtx.fillStyle = '#00f0ff';
-          qBoardCtx.font = 'bold 15px monospace';
-          qBoardCtx.textAlign = 'right';
-          qBoardCtx.fillText(`GOODY THINKING...`, 492, 36);
-        } else if (isQuestionTimerActive && questionTimer > 0 && !isTieBreakerActive) {
+        if (isQuestionTimerActive && questionTimer > 0 && !isTieBreakerActive) {
           qBoardCtx.fillStyle = '#ff7675';
           qBoardCtx.font = 'bold 20px monospace';
           qBoardCtx.textAlign = 'right';
@@ -2956,7 +3107,7 @@
           qBoardCtx.fillText("THE GOODY TONIGHT SHOW", 256, 110);
         } else {
           const isCurrentPlayerTurn = isSoloMode ? (activePlayer === soloPlayerId) : (activePlayer !== goodyPlayerSlot);
-         
+
           if (gameState === "IN_PLAY" && (!hasPlayerRolledThisTurn || (hasPlayerRolledThisTurn && isPawnMoving && (p1RollVal !== null || p2RollVal !== null))) && isCurrentPlayerTurn) {
             const pName = contestantNames[activePlayer];
             const currentRolled = activePlayer === "goody-contestant-2" ? p2RollVal : p1RollVal;
@@ -3048,7 +3199,7 @@
       new THREE.PlaneGeometry(3.6, 2.7),
       new THREE.MeshBasicMaterial({ map: qBoardTex })
     );
-    qBoardMesh.position.set(-4.8, 2.15, -3.2);
+    qBoardMesh.position.set(-4.8, 2.05, -3.2);
     qBoardMesh.rotation.y = 0.8;
     miniDiorama.add(qBoardMesh);
 
@@ -3063,16 +3214,43 @@
 
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
+       
+    function isLocalTurnOwner() {
+      if (!selfSocketId) return false;
+      if (activePlayer === "goody-contestant-1") return lockedP1SocketId === selfSocketId;
+      if (activePlayer === "goody-contestant-2") return !isVsGoodyMode && lockedP2SocketId === selfSocketId;
+      return false;
+    }
+
+    function canLocalRollOpeningDuel() {
+      if (!selfSocketId) return false;
+      if (lockedP1SocketId === selfSocketId && p1RollVal === null) return true;
+      if (!isSoloMode && !isVsGoodyMode && lockedP2SocketId === selfSocketId && p2RollVal === null) return true;
+      return false;
+    }
 
     function triggerRollAction() {
       if (gameState === "OPENING_DUEL") {
-        if (isSoloMode) {
-          if (p1RollVal === null) handlePlayerRoll("goody-contestant-1", contestantNames["goody-contestant-1"], Math.floor(Math.random() * 6) + 1);
-        } else {
-          if (p1RollVal === null) handlePlayerRoll("goody-contestant-1", contestantNames["goody-contestant-1"], Math.floor(Math.random() * 6) + 1);
-          if (p2RollVal === null) handlePlayerRoll("goody-contestant-2", contestantNames["goody-contestant-2"], Math.floor(Math.random() * 6) + 1);
+        if (!canLocalRollOpeningDuel()) return;
+        if (!isLocalHost) {
+          if (socket && socket.connected) {
+            socket.emit('client_action', { type: 'ROLL_DICE', senderId: selfSocketId });
+          }
+          return;
+        }
+        if (lockedP1SocketId === selfSocketId && p1RollVal === null) {
+          handlePlayerRoll("goody-contestant-1", contestantNames["goody-contestant-1"], Math.floor(Math.random() * 6) + 1);
+        } else if (!isSoloMode && !isVsGoodyMode && lockedP2SocketId === selfSocketId && p2RollVal === null) {
+          handlePlayerRoll("goody-contestant-2", contestantNames["goody-contestant-2"], Math.floor(Math.random() * 6) + 1);
         }
       } else if (gameState === "IN_PLAY") {
+        if (!isLocalTurnOwner()) return;
+        if (!isLocalHost) {
+          if (socket && socket.connected) {
+            socket.emit('client_action', { type: 'ROLL_DICE', senderId: selfSocketId });
+          }
+          return;
+        }
         const isAllowedPlayer = isSoloMode ? (activePlayer === soloPlayerId) : (activePlayer !== goodyPlayerSlot);
         if (!hasPlayerRolledThisTurn && isAllowedPlayer && !isPawnMoving && !activeQuestion && !activeRecap) {
           const rollVal = Math.floor(Math.random() * 6) + 1;
@@ -3089,45 +3267,57 @@
       mouse.y = -(clientY / window.innerHeight) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
-      const interactiveTargets = [screenClickMesh, qBoardMesh, studioBackScreenMesh];
-      const intersects = raycaster.intersectObjects(interactiveTargets, false);
+      const boardTargets = [screenClickMesh, qBoardMesh];
+      const boardHits = raycaster.intersectObjects(boardTargets, false);
 
-      if (intersects.length > 0) {
-        const hit = intersects[0];
+      if (boardHits.length > 0) {
+        const hit = boardHits[0];
+        const uv = hit.uv;
+        const canvasX = uv ? uv.x * 512 : 256;
+        const canvasY = uv ? (1 - uv.y) * 384 : -1;
 
-        if (gameState === "MODE_PROMPT" && isLocalOnPodium1) {
-          const uv = hit.uv;
-          if (uv) {
-            if (uv.y >= 0.35 && uv.y < 0.58) {
-              chooseHostGameMode("GOODY");
-            } else if (uv.y >= 0.58 && uv.y <= 0.82) {
+        const canInteractPrompt = !hasReachedSessionGameLimit() && (getPodiumCooldownRemaining() === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
+
+        if (gameState === "MODE_PROMPT" && canInteractPrompt && canvasY >= 0) {
+          const allowSoloAndGoody = !!window.isDropoutRecoveryPrompt;
+          if (canvasX >= 40 && canvasX <= 472) {
+            if (canvasY >= 125 && canvasY <= 167 && allowSoloAndGoody) {
               chooseHostGameMode("SOLO");
+              return;
+            }
+            if (canvasY >= 178 && canvasY <= 220 && allowSoloAndGoody) {
+              chooseHostGameMode("GOODY");
+              return;
+            }
+            if (canvasY >= 231 && canvasY <= 273 && p2InviteAttempts < 2) {
+              chooseHostGameMode("TWOPLAYER");
+              return;
             }
           }
           return;
         }
 
-        if (activeQuestion) {
-          if (activePlayer === goodyPlayerSlot) return;
-          if (!isQuestionTimerActive) return;
+        if (activeQuestion && canvasY >= 0) {
+          const isParticipant = selfSocketId && (lockedP1SocketId === selfSocketId || (!isVsGoodyMode && lockedP2SocketId === selfSocketId));
+          if (!isTieBreakerActive && !isLocalTurnOwner()) return;
+          if (isTieBreakerActive && !isParticipant) return;
+          if (stageSelectedOption !== null) return;
 
-          const uv = hit.uv;
-          if (uv) {
-            let chosenOpt = null;
-            if (uv.y >= 0.42 && uv.y <= 0.53) {
-              chosenOpt = activeQuestion.options[0];
-            } else if (uv.y >= 0.31 && uv.y < 0.42) {
-              chosenOpt = activeQuestion.options[1];
-            } else if (uv.y >= 0.20 && uv.y < 0.31) {
-              chosenOpt = activeQuestion.options[2];
-            } else if (uv.y >= 0.09 && uv.y < 0.20) {
-              chosenOpt = activeQuestion.options[3];
-            }
-
-            if (chosenOpt) {
+          for (let idx = 0; idx < activeQuestion.options.length; idx++) {
+            const boxTop = (210 + idx * 40) - 24;
+            const boxBottom = boxTop + 32;
+            if (canvasX >= 20 && canvasX <= 492 && canvasY >= boxTop && canvasY <= boxBottom) {
+              if (!isLocalHost) {
+                if (socket && socket.connected) {
+                  socket.emit('client_action', { type: 'ANSWER_QUESTION', optionIndex: idx, senderId: selfSocketId });
+                }
+                return;
+              }
+              const chosenOpt = activeQuestion.options[idx];
               stageSelectedOption = chosenOpt;
               stageOptionStatus = 'selected';
               renderStageQuestionBoard();
+              pushAuthoritativeState();
 
               setTimeout(() => {
                 evaluateAnswer(activePlayer, chosenOpt);
@@ -3135,105 +3325,95 @@
               return;
             }
           }
+          return;
         }
 
-        const isOpeningRollReady = (gameState === "OPENING_DUEL" && isDiceTimerActive);
-        const isTurnRollReady = (gameState === "IN_PLAY" && !hasPlayerRolledThisTurn && isDiceTimerActive);
+        triggerRollAction();
+        return;
+      }
 
-        if (isOpeningRollReady || isTurnRollReady) {
-          triggerRollAction();
-        }
+      const backHits = raycaster.intersectObject(studioBackScreenMesh, false);
+      if (backHits.length > 0 && !activeQuestion && gameState !== "MODE_PROMPT") {
+        triggerRollAction();
       }
     }
 
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('pointerup', (e) => {
+      if (e.target && e.target.closest && e.target.closest('#mobile-controls')) return;
       handleScreenTap(e.clientX, e.clientY);
     });
 
     const moveState = { forward: false, backward: false, turnLeft: false, turnRight: false };
-    const plushiePosition = new THREE.Vector3(32.0, 0.44, 2.5);
     const plushieRotation = { yaw: 0 };
-    const plushieVelocity = new THREE.Vector3(0, 0, 0);
 
-    function createCutePlushie(color, initialName = "") {
-      const pGroup = new THREE.Group();
-      const pMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.95 });
-      const pBody = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 14), pMat); pBody.position.y = 0.28; pGroup.add(pBody);
-      const pHead = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 14), pMat); pHead.position.y = 0.58; pGroup.add(pHead);
-      const ear1 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), pMat); ear1.position.set(-0.14, 0.74, 0);
-      const ear2 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), pMat); ear2.position.set(0.14, 0.74, 0); pGroup.add(ear1, ear2);
-      const blushMat = new THREE.MeshBasicMaterial({ color: 0xff69b4 });
-      const blush1 = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), blushMat); blush1.position.set(-0.11, 0.54, 0.17);
-      const blush2 = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), blushMat); blush2.position.set(0.11, 0.54, 0.17); pGroup.add(blush1, blush2);
-      const eyeBlackMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-      const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), eyeBlackMat); eyeL.position.set(-0.07, 0.60, 0.19);
-      const shineL = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), eyeWhiteMat); shineL.position.set(-0.08, 0.612, 0.21); pGroup.add(eyeL, shineL);
-      const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), eyeBlackMat); eyeR.position.set(0.07, 0.60, 0.19);
-      const shineR = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), eyeWhiteMat); shineR.position.set(0.06, 0.612, 0.21); pGroup.add(eyeR, shineR);
-      const snout = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 8), new THREE.MeshStandardMaterial({ color: 0xff8fab, roughness: 0.6 }));
-      snout.scale.set(1.2, 0.8, 1); snout.position.set(0, 0.56, 0.21); pGroup.add(snout);
-      const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 4, 8, Math.PI), new THREE.MeshBasicMaterial({ color: 0x222222 }));
-      mouth.position.set(0, 0.525, 0.21); mouth.rotation.x = Math.PI * 0.1; pGroup.add(mouth);
-
-      let badgeMesh = null;
-      let bCanvas = null;
-      let bTex = null;
-
-      if (initialName) {
-        bCanvas = document.createElement('canvas');
-        bCanvas.width = 256; bCanvas.height = 96;
-        bTex = new THREE.CanvasTexture(bCanvas);
-        const badgeMat = new THREE.MeshBasicMaterial({
-          map: bTex,
-          transparent: true,
-          opacity: 0.3,
-          side: THREE.DoubleSide,
-          depthWrite: false
-        });
-        badgeMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.185), badgeMat);
-        badgeMesh.position.set(0, 0.95, 0);
-        badgeMesh.matrixAutoUpdate = true;
-        miniDiorama.add(badgeMesh);
-        updatePlushieNameBadge(pGroup, initialName);
-      }
-     
-      pGroup.userData = {
-        badgeCanvas: bCanvas, badgeTexture: bTex, badgeMesh: badgeMesh
+    function bindMobileHoldButton(btnId, stateKey) {
+      const el = document.getElementById(btnId);
+      if (!el) return;
+      const press = (e) => {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        initAudio();
+        moveState[stateKey] = true;
+        el.classList.add('is-pressed');
       };
+      const release = (e) => {
+        if (e && e.cancelable) e.preventDefault();
+        moveState[stateKey] = false;
+        el.classList.remove('is-pressed');
+      };
+      el.addEventListener('touchstart', press, { passive: false });
+      el.addEventListener('touchend', release, { passive: false });
+      el.addEventListener('touchcancel', release, { passive: false });
+      el.addEventListener('pointerdown', press);
+      el.addEventListener('pointerup', release);
+      el.addEventListener('pointerleave', release);
+      el.addEventListener('pointercancel', release);
+    }
+    bindMobileHoldButton('btn-m-fwd', 'forward');
+    bindMobileHoldButton('btn-m-back', 'backward');
+    bindMobileHoldButton('btn-m-left', 'turnLeft');
+    bindMobileHoldButton('btn-m-right', 'turnRight');
+
+    const _sharedPlushGeo = {
+      body: new THREE.SphereGeometry(0.28, 10, 10),
+      head: new THREE.SphereGeometry(0.22, 10, 10),
+      ear: new THREE.SphereGeometry(0.08, 8, 8),
+      blush: new THREE.SphereGeometry(0.038, 6, 6),
+      eye: new THREE.SphereGeometry(0.032, 6, 6),
+      shine: new THREE.SphereGeometry(0.012, 6, 6),
+      snout: new THREE.SphereGeometry(0.042, 6, 6),
+      mouth: new THREE.TorusGeometry(0.03, 0.007, 4, 6, Math.PI),
+      blushMat: new THREE.MeshBasicMaterial({ color: 0xff69b4 }),
+      eyeBlackMat: new THREE.MeshBasicMaterial({ color: 0x111111 }),
+      eyeWhiteMat: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+      snoutMat: new THREE.MeshLambertMaterial({ color: 0xff8fab }),
+      mouthMat: new THREE.MeshBasicMaterial({ color: 0x222222 })
+    };
+
+    function createCutePlushie(color) {
+      const pGroup = new THREE.Group();
+      const pMat = new THREE.MeshLambertMaterial({ color: color });
+      const pBody = new THREE.Mesh(_sharedPlushGeo.body, pMat); pBody.position.y = 0.28; pGroup.add(pBody);
+      const pHead = new THREE.Mesh(_sharedPlushGeo.head, pMat); pHead.position.y = 0.58; pGroup.add(pHead);
+      const ear1 = new THREE.Mesh(_sharedPlushGeo.ear, pMat); ear1.position.set(-0.14, 0.74, 0);
+      const ear2 = new THREE.Mesh(_sharedPlushGeo.ear, pMat); ear2.position.set(0.14, 0.74, 0); pGroup.add(ear1, ear2);
+      const blush1 = new THREE.Mesh(_sharedPlushGeo.blush, _sharedPlushGeo.blushMat); blush1.position.set(-0.11, 0.54, 0.17);
+      const blush2 = new THREE.Mesh(_sharedPlushGeo.blush, _sharedPlushGeo.blushMat); blush2.position.set(0.11, 0.54, 0.17); pGroup.add(blush1, blush2);
+      const eyeL = new THREE.Mesh(_sharedPlushGeo.eye, _sharedPlushGeo.eyeBlackMat); eyeL.position.set(-0.07, 0.60, 0.19);
+      const shineL = new THREE.Mesh(_sharedPlushGeo.shine, _sharedPlushGeo.eyeWhiteMat); shineL.position.set(-0.08, 0.612, 0.21); pGroup.add(eyeL, shineL);
+      const eyeR = new THREE.Mesh(_sharedPlushGeo.eye, _sharedPlushGeo.eyeBlackMat); eyeR.position.set(0.07, 0.60, 0.19);
+      const shineR = new THREE.Mesh(_sharedPlushGeo.shine, _sharedPlushGeo.eyeWhiteMat); shineR.position.set(0.06, 0.612, 0.21); pGroup.add(eyeR, shineR);
+      const snout = new THREE.Mesh(_sharedPlushGeo.snout, _sharedPlushGeo.snoutMat);
+      snout.scale.set(1.2, 0.8, 1); snout.position.set(0, 0.56, 0.21); pGroup.add(snout);
+      const mouth = new THREE.Mesh(_sharedPlushGeo.mouth, _sharedPlushGeo.mouthMat);
+      mouth.position.set(0, 0.525, 0.21); mouth.rotation.x = Math.PI * 0.1; pGroup.add(mouth);
       return pGroup;
     }
 
-    function updatePlushieNameBadge(pGroup, displayName, teamColor = '#00f0ff') {
-      if (!pGroup || !pGroup.userData || !pGroup.userData.badgeCanvas) return;
-      const canvas = pGroup.userData.badgeCanvas;
-      const ctx = canvas.getContext('2d');
-      const w = canvas.width; const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-
-      ctx.fillStyle = 'rgba(22, 9, 44, 0.9)';
-      ctx.strokeStyle = teamColor;
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(4, 4, w - 8, h - 8, 20);
-      } else {
-        ctx.rect(4, 4, w - 8, h - 8);
-      }
-      ctx.fill(); ctx.stroke();
-
-      ctx.fillStyle = teamColor;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = 'bold 38px sans-serif';
-      ctx.fillText((displayName || "PLAYER 1").toUpperCase(), w / 2, h / 2 + 2);
-
-      if (pGroup.userData.badgeTexture) {
-        pGroup.userData.badgeTexture.needsUpdate = true;
-      }
-    }
-
     function setPlushieVisualMode(group, mode) {
-      if (!group) return;
+      if (!group || group.userData.visualMode === mode) return;
+      group.userData.visualMode = mode;
       if (mode === 'invisible') {
         group.visible = false;
         return;
@@ -3241,7 +3421,7 @@
       group.visible = true;
       const isOpaque = (mode === 'opaque');
       group.traverse(child => {
-        if (child.isMesh && child.material && child !== group.userData.badgeMesh) {
+        if (child.isMesh && child.material) {
           const mats = Array.isArray(child.material) ? child.material : [child.material];
           mats.forEach(m => {
             if (isOpaque) {
@@ -3259,56 +3439,33 @@
       });
     }
 
-    let assignedTeam = 'BLUE';
-    let teamColorHex = '#00f0ff';
-    let plushieColorHex = 0x00f0ff;
-    let localPlushie = null;
-
-    if (socket) {
-      socket.on('assign_team', (data) => {
-        assignedTeam = data.team;
-        teamColorHex = data.teamColor;
-        plushieColorHex = assignedTeam === 'RED' ? 0xff3838 : 0x00f0ff;
-
-        if (localPlushie) {
-          localPlushie.userData.team = assignedTeam;
-          localPlushie.traverse(child => {
-            if (child.isMesh && child.material && child !== localPlushie.userData.badgeMesh) {
-              child.material.color.setHex(plushieColorHex);
-            }
-          });
-          updatePlushieNameBadge(localPlushie, localMyGuestName, teamColorHex);
-        }
-      });
-    }
-
-    localPlushie = createCutePlushie(plushieColorHex, localMyGuestName);
-    localPlushie.userData.team = assignedTeam;
-    updatePlushieNameBadge(localPlushie, localMyGuestName, teamColorHex);
-   
+    const localPlushie = createCutePlushie(0x00f0ff);
     localPlushie.position.copy(plushiePosition);
     miniDiorama.add(localPlushie);
-    setPlushieVisualMode(localPlushie, 'opaque');
+    setPlushieVisualMode(localPlushie, 'transparent');
 
     document.addEventListener('keydown', (e) => {
       if (!isHostAuthorized) return;
-      if (e.code === 'KeyW') moveState.forward = true;
-      if (e.code === 'KeyS') moveState.backward = true;
-      if (e.code === 'KeyA') moveState.turnLeft = true;
-      if (e.code === 'KeyD') moveState.turnRight = true;
+      if (e.code === 'KeyW' || e.code === 'ArrowUp') moveState.forward = true;
+      if (e.code === 'KeyS' || e.code === 'ArrowDown') moveState.backward = true;
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft') moveState.turnLeft = true;
+      if (e.code === 'KeyD' || e.code === 'ArrowRight') moveState.turnRight = true;
 
-      if (gameState === "MODE_PROMPT" && isLocalOnPodium1) {
-        if (e.key === '1') chooseHostGameMode("SOLO");
-        if (e.key === '2') chooseHostGameMode("GOODY");
+      const canInteractPrompt = !hasReachedSessionGameLimit() && (getPodiumCooldownRemaining() === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
+      if (gameState === "MODE_PROMPT" && canInteractPrompt) {
+        const allowSoloAndGoody = !!window.isDropoutRecoveryPrompt;
+        if (e.key === '1' && allowSoloAndGoody) chooseHostGameMode("SOLO");
+        if (e.key === '2' && allowSoloAndGoody) chooseHostGameMode("GOODY");
+        if (e.key === '3' && p2InviteAttempts < 2) chooseHostGameMode("TWOPLAYER");
       }
     });
 
     document.addEventListener('keyup', (e) => {
       if (!isHostAuthorized) return;
-      if (e.code === 'KeyW') moveState.forward = false;
-      if (e.code === 'KeyS') moveState.backward = false;
-      if (e.code === 'KeyA') moveState.turnLeft = false;
-      if (e.code === 'KeyD') moveState.turnRight = false;
+      if (e.code === 'KeyW' || e.code === 'ArrowUp') moveState.forward = false;
+      if (e.code === 'KeyS' || e.code === 'ArrowDown') moveState.backward = false;
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft') moveState.turnLeft = false;
+      if (e.code === 'KeyD' || e.code === 'ArrowRight') moveState.turnRight = false;
     });
 
     const miniAudience = new THREE.Group();
@@ -3321,7 +3478,7 @@
       for (let i = 0; i < count; i++) {
         const theta = -Math.PI * 0.65 + (i / (count - 1)) * (Math.PI * 1.30);
         const col = plushColors[(i + rowIdx * 3) % plushColors.length];
-        const pGroup = createCutePlushie(col, "");
+        const pGroup = createCutePlushie(col);
 
         const px = Math.sin(theta) * radius;
         const pz = Math.cos(theta) * (radius * 0.95) + 0.8;
@@ -3371,8 +3528,8 @@
         targetPlushie.position.z += rightZ * step;
       }
 
-      targetPlushie.position.x = Math.max(-6.8, Math.min(54.0, targetPlushie.position.x));
-      targetPlushie.position.z = Math.max(-14.0, Math.min(14.0, targetPlushie.position.z));
+      targetPlushie.position.x = Math.max(-6.8, Math.min(6.8, targetPlushie.position.x));
+      targetPlushie.position.z = Math.max(-6.8, Math.min(6.8, targetPlushie.position.z));
       targetPlushie.position.y = 0.46;
     }
 
@@ -3449,15 +3606,10 @@
       ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(x, y + height - 26, width, 26);
       ctx.fillStyle = isGoodyHostSlot ? '#00f0ff' : (isLive ? '#39ff14' : '#ffda66');
       ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center';
-     
-      let tag = "";
-      if (isGoodyHostSlot) {
-        tag = `[AI HOST: GOODY]`;
-      } else if (city === "") {
-        tag = name.toUpperCase();
-      } else {
-        tag = `${isLive ? ' LIVE ' : ' CALL'} ${name.toUpperCase()} [${city.toUpperCase()}]`;
-      }
+
+      const tag = isGoodyHostSlot
+        ? `[AI HOST: GOODY]`
+        : `${isLive ? ' LIVE ' : ' CALL'} ${name.toUpperCase()} [${city.toUpperCase()}]`;
 
       ctx.fillText(tag, x + width/2, y + height - 8);
     }
@@ -3510,7 +3662,7 @@
     }
 
     const studioBackScreenMesh = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 2.8), new THREE.MeshBasicMaterial({ map: studioScreenTex }));
-    studioBackScreenMesh.position.set(0, 2.15, -4.5); miniDiorama.add(studioBackScreenMesh);
+    studioBackScreenMesh.position.set(0, 2.05, -4.5); miniDiorama.add(studioBackScreenMesh);
 
     const miniGoody = new THREE.Group();
     const silverMetalMat = new THREE.MeshStandardMaterial({
@@ -3621,143 +3773,82 @@
     });
 
     let prevTime = performance.now();
-    let lastBallSyncTime = 0;
-
     function animate() {
       requestAnimationFrame(animate);
       const time = performance.now();
       const delta = Math.min((time - prevTime) / 1000, 0.1);
 
-      renderBackstageScreens();
-      renderGoodyFace(time);
+      if (!window._lastScreenTexTime || time - window._lastScreenTexTime > 80) {
+        window._lastScreenTexTime = time;
+        renderBackstageScreens();
+        renderGoodyFace(time);
+      }
 
       const isPlayerTurnRoll = gameState === "IN_PLAY" && !hasPlayerRolledThisTurn && (isSoloMode ? activePlayer === soloPlayerId : activePlayer !== goodyPlayerSlot);
-      if (gameState === "OPENING_DUEL" || isPlayerTurnRoll) {
+      if ((gameState === "OPENING_DUEL" || isPlayerTurnRoll) && (!window._lastDiceBoardTime || time - window._lastDiceBoardTime > 65)) {
+        window._lastDiceBoardTime = time;
         renderStageQuestionBoard();
       }
 
-      if (moveState.turnLeft) plushieRotation.yaw += 2.2 * delta;
-      if (moveState.turnRight) plushieRotation.yaw -= 2.2 * delta;
-
-      const moveSpeed = 4.2 * delta;
-      if (moveState.forward) {
-        plushieVelocity.x += -Math.sin(plushieRotation.yaw) * moveSpeed * 5.0;
-        plushieVelocity.z += -Math.cos(plushieRotation.yaw) * moveSpeed * 5.0;
+      let movedThisFrame = false;
+      if (moveState.turnLeft) {
+        plushieRotation.yaw += 2.2 * delta;
+        movedThisFrame = true;
       }
-      if (moveState.backward) {
-        plushieVelocity.x -= -Math.sin(plushieRotation.yaw) * moveSpeed * 5.0;
-        plushieVelocity.z -= -Math.cos(plushieRotation.yaw) * moveSpeed * 5.0;
+      if (moveState.turnRight) {
+        plushieRotation.yaw -= 2.2 * delta;
+        movedThisFrame = true;
       }
 
-const friction = 10.0; // Higher = stops faster
-plushieVelocity.multiplyScalar(Math.exp(-friction * delta));
-plushiePosition.addScaledVector(plushieVelocity, delta);
+      const p1Pos = new THREE.Vector3(-1.6, 0.44, -2.2);
+      const p2Pos = new THREE.Vector3(1.6, 0.44, -2.2);
 
-      plushiePosition.x = Math.max(-6.5, Math.min(54.0, plushiePosition.x));
-      plushiePosition.z = Math.max(-13.5, Math.min(13.5, plushiePosition.z));
-     
-      if (Math.abs(plushiePosition.x - 10.0) < 0.4) {
-        if (plushiePosition.z < -5.5 || plushiePosition.z > -2.5) {
-          if (plushiePosition.x < 10.0) {
-            plushiePosition.x = 9.6;
-          } else {
-            plushiePosition.x = 10.4;
-          }
-        }
-      }
+      const isGameSessionActive = gameState !== "GAME_OVER" && (studioPower || gameState === "WAITING_FOR_P2" || !!lockedP1SocketId);
+      const isLockedToP1 = isGameSessionActive && selfSocketId && lockedP1SocketId === selfSocketId;
+      const isLockedToP2 = isGameSessionActive && selfSocketId && lockedP2SocketId === selfSocketId;
 
-      const inPitchArena = plushiePosition.x > 10.0;
-      if (inPitchArena) {
-        const ballPos = ballMesh.position;
-        const plushXZ = new THREE.Vector3(plushiePosition.x, 0, plushiePosition.z);
-        const ballXZ = new THREE.Vector3(ballPos.x, 0, ballPos.z);
-        const distToBall = plushXZ.distanceTo(ballXZ);
-
-        if (isBallPhysicsHost) {
-          if (distToBall < 0.78) {
-            const pushDir = new THREE.Vector3().subVectors(ballXZ, plushXZ).normalize();
-            ballVelocity.addScaledVector(pushDir, 13.0);
-            playTone(600, 'triangle', 0.08, 0.1);
-          }
-
-          remotePlayers.forEach((pMesh) => {
-            if (pMesh) {
-              const remoteXZ = new THREE.Vector3(pMesh.position.x, 0, pMesh.position.z);
-              if (remoteXZ.distanceTo(ballXZ) < 0.78) {
-                const pushDir = new THREE.Vector3().subVectors(ballXZ, remoteXZ).normalize();
-                ballVelocity.addScaledVector(pushDir, 13.0);
-                playTone(600, 'triangle', 0.08, 0.1);
-              }
-            }
-          });
-
-          ballPos.addScaledVector(ballVelocity, delta);
-          ballVelocity.multiplyScalar(0.96);
-
-          if (ballPos.z > 11.7) { ballPos.z = 11.7; ballVelocity.z *= -0.8; playTone(300, 'sine', 0.05, 0.05); }
-          if (ballPos.z < -11.7) { ballPos.z = -11.7; ballVelocity.z *= -0.8; playTone(300, 'sine', 0.05, 0.05); }
-
-          if (ballPos.x < 16.2 && ballPos.z > -2.5 && ballPos.z < 2.5) {
-            redScore++;
-            renderPitchScoreboard(blueScore, redScore);
-            playTone(200, 'sawtooth', 0.3, 0.15);
-            ballMesh.position.set(34.0, 0.82, 0.0);
-            ballVelocity.set(0, 0, 0);
-            if (socket && socket.connected) {
-              socket.emit('score_update', { blue: blueScore, red: redScore });
-            }
-          } else if (ballPos.x > 51.8 && ballPos.z > -2.5 && ballPos.z < 2.5) {
-            blueScore++;
-            renderPitchScoreboard(blueScore, redScore);
-            playTone(800, 'sine', 0.3, 0.15);
-            ballMesh.position.set(34.0, 0.82, 0.0);
-            ballVelocity.set(0, 0, 0);
-            if (socket && socket.connected) {
-              socket.emit('score_update', { blue: blueScore, red: redScore });
-            }
-          }
-
-          ballPos.x = Math.max(16.3, Math.min(51.7, ballPos.x));
-
-          if (socket && socket.connected && (time - lastBallSyncTime > 30)) {
-            lastBallSyncTime = time;
-            socket.emit('ball_move', {
-              x: ballPos.x,
-              y: ballPos.y,
-              z: ballPos.z,
-              vx: ballVelocity.x,
-              vy: ballVelocity.y,
-              vz: ballVelocity.vz
-            });
-          }
-        } else {
-          if (hasRemoteBallUpdate) {
-            ballMesh.position.lerp(remoteBallTarget, 0.35);
-          }
-        }
+      const moveSpeed = 3.8 * delta;
+      if (isLockedToP1) {
+        plushiePosition.set(p1Pos.x, 0.58, p1Pos.z);
+      } else if (isLockedToP2) {
+        plushiePosition.set(p2Pos.x, 0.58, p2Pos.z);
       } else {
-        ballMesh.position.set(34.0, 0.82, 0.0);
-        ballVelocity.set(0, 0, 0);
-        hasRemoteBallUpdate = false;
-      }
+        if (moveState.forward) {
+          plushiePosition.x -= Math.sin(plushieRotation.yaw) * moveSpeed;
+          plushiePosition.z -= Math.cos(plushieRotation.yaw) * moveSpeed;
+          movedThisFrame = true;
+        }
+        if (moveState.backward) {
+          plushiePosition.x += Math.sin(plushieRotation.yaw) * moveSpeed;
+          plushiePosition.z += Math.cos(plushieRotation.yaw) * moveSpeed;
+          movedThisFrame = true;
+        }
 
-      if (socket && socket.connected) {
-        socket.emit('player_move', {
-          name: localMyGuestName,
-          x: plushiePosition.x,
-          y: plushiePosition.y,
-          z: plushiePosition.z,
-          yaw: plushieRotation.yaw,
-          team: assignedTeam,
-          teamColor: teamColorHex
-        });
+        plushiePosition.x = Math.max(-6.5, Math.min(6.5, plushiePosition.x));
+        plushiePosition.z = Math.max(-6.5, Math.min(6.5, plushiePosition.z));
+
+        if (lockedP1SocketId && lockedP1SocketId !== selfSocketId) {
+          const dx1 = plushiePosition.x - p1Pos.x;
+          const dz1 = plushiePosition.z - p1Pos.z;
+          const d1 = Math.hypot(dx1, dz1);
+          if (d1 < 0.78 && d1 > 0.0001) {
+            plushiePosition.x = p1Pos.x + (dx1 / d1) * 0.78;
+            plushiePosition.z = p1Pos.z + (dz1 / d1) * 0.78;
+          }
+        }
+        if (lockedP2SocketId && lockedP2SocketId !== selfSocketId) {
+          const dx2 = plushiePosition.x - p2Pos.x;
+          const dz2 = plushiePosition.z - p2Pos.z;
+          const d2 = Math.hypot(dx2, dz2);
+          if (d2 < 0.78 && d2 > 0.0001) {
+            plushiePosition.x = p2Pos.x + (dx2 / d2) * 0.78;
+            plushiePosition.z = p2Pos.z + (dz2 / d2) * 0.78;
+          }
+        }
       }
 
       const dioramaWorldPos = new THREE.Vector3(0, 3.95, -9);
       const plushieWorldPos = plushiePosition.clone().add(dioramaWorldPos);
-
-      const p1Pos = new THREE.Vector3(-1.6, 0.44, -2.2);
-      const p2Pos = new THREE.Vector3(1.6, 0.44, -2.2);
 
       const distP1 = plushiePosition.distanceTo(p1Pos);
       const distP2 = plushiePosition.distanceTo(p2Pos);
@@ -3771,15 +3862,26 @@ plushiePosition.addScaledVector(plushieVelocity, delta);
       localPlushie.position.copy(plushiePosition);
       localPlushie.rotation.y = plushieRotation.yaw + Math.PI;
 
-      const camTargetX = plushieWorldPos.x + Math.sin(plushieRotation.yaw) * 1.8;
-      const camTargetZ = plushieWorldPos.z + Math.cos(plushieRotation.yaw) * 1.8;
-      const camTargetY = plushieWorldPos.y + 1.0;
+      if (movedThisFrame) {
+        emitLocalPlushiePosition(false);
+      }
 
-      const smoothFactor = 1.0 - Math.exp(-12.0 * delta);
+      remotePlushies.forEach((entry) => {
+        entry.mesh.position.lerp(entry.targetPos, 0.25);
+        entry.mesh.rotation.y += (entry.targetYaw - entry.mesh.rotation.y) * 0.25;
+        if (entry.mesh.userData && entry.mesh.userData.nameTagMesh) {
+          entry.mesh.userData.nameTagMesh.quaternion.copy(camera.quaternion);
+        }
+      });
 
-      camera.position.x += (camTargetX - camera.position.x) * smoothFactor;
-      camera.position.y += (camTargetY - camera.position.y) * smoothFactor;
-      camera.position.z += (camTargetZ - camera.position.z) * smoothFactor;
+      const camTargetX = plushieWorldPos.x + Math.sin(plushieRotation.yaw) * 5.0;
+      const camTargetZ = plushieWorldPos.z + Math.cos(plushieRotation.yaw) * 5.0;
+      const camTargetY = plushieWorldPos.y + 2.5;
+
+      const camSmooth = 1.0 - Math.exp(-18.0 * delta);
+      camera.position.x += (camTargetX - camera.position.x) * camSmooth;
+      camera.position.y += (camTargetY - camera.position.y) * camSmooth;
+      camera.position.z += (camTargetZ - camera.position.z) * camSmooth;
 
       camera.lookAt(plushieWorldPos.x, plushieWorldPos.y + 0.6, plushieWorldPos.z);
 
@@ -3789,9 +3891,64 @@ plushiePosition.addScaledVector(plushieVelocity, delta);
       isLocalOnPodium1 = distP1 < 0.65;
       isLocalOnPodium2 = distP2 < 0.65;
 
+      if (isLocalHost && gameState === "WAITING_FOR_P2") {
+        let p2JoinerId = null;
+        if (isLocalOnPodium2 && !isLocalOnPodium1 && selfSocketId !== lockedP1SocketId) {
+          p2JoinerId = selfSocketId;
+        } else {
+          remotePlushies.forEach((entry, id) => {
+            if (!p2JoinerId && id !== lockedP1SocketId && entry.mesh && entry.mesh.position.distanceTo(p2Pos) < 0.65) {
+              p2JoinerId = id;
+            }
+          });
+        }
+        if (p2JoinerId) {
+          lockedP2SocketId = p2JoinerId;
+          stopPodium2JoinWait();
+          gameState = "INTRO_SPEECH";
+          renderStageQuestionBoard();
+          pushAuthoritativeState();
+          speakGoody("Player 2 has stepped up to Podium 2! Let's roll our dice to see who goes first!", () => {
+            beginTenSecondDiceDuel();
+          });
+        }
+      }
+
+      if (gameState === "MODE_PROMPT" && getPodiumCooldownRemaining() > 0 && (isLocalOnPodium1 || isLocalOnPodium2)) {
+        renderStageQuestionBoard();
+      }
+
       if ((isLocalOnPodium1 !== prevPodium1) || (isLocalOnPodium2 !== prevPodium2)) {
+        if (!hasReachedSessionGameLimit() && getPodiumCooldownRemaining() === 0) {
+          if (isLocalOnPodium1 && lastPodiumClaimed !== 1 && socket && socket.connected) {
+            lastPodiumClaimed = 1;
+            socket.emit('client_action', { type: 'CLAIM_PODIUM', slot: 1 });
+          } else if (isLocalOnPodium2 && lastPodiumClaimed !== 2 && socket && socket.connected) {
+            lastPodiumClaimed = 2;
+            socket.emit('client_action', { type: 'CLAIM_PODIUM', slot: 2 });
+          }
+        }
+
+        if (studioPower && !isSoloMode && !isVsGoodyMode && gameState === "IN_PLAY") {
+          if ((prevPodium1 && !isLocalOnPodium1) || (prevPodium2 && !isLocalOnPodium2)) {
+            podiumCooldownUntil = Date.now() + 30000;
+            lastPodiumClaimed = 0;
+            window.isDropoutRecoveryPrompt = true;
+            studioPower = false;
+            gameState = "MODE_PROMPT";
+            updateStudioLighting(false);
+            updateCameraAlignment();
+            updateHudStatusBanner();
+            renderStageQuestionBoard();
+            pushAuthoritativeState();
+          }
+        }
+
         if (!studioPower && gameState === "MODE_PROMPT") {
           renderStageQuestionBoard();
+        }
+        if (isLocalHost && gameState === "IDLE" && isLocalOnPodium1 && isLocalOnPodium2 && !studioPower) {
+          chooseHostGameMode("TWOPLAYER");
         }
       }
 
@@ -3802,18 +3959,37 @@ plushiePosition.addScaledVector(plushieVelocity, delta);
         const dP2 = pos.distanceTo(p2Pos);
         const onPodium1 = dP1 < 0.65;
         const onPodium2 = dP2 < 0.65;
+        const isGameActive = studioPower;
 
-        const inPitchArena = pos.x > 10.0;
-        if (inPitchArena) {
+        if (!isGameActive) {
+          if (isSoloMode || isVsGoodyMode) {
+            if (onPodium1) {
+              setPlushieVisualMode(plushieMesh, 'opaque');
+            } else {
+              setPlushieVisualMode(plushieMesh, 'transparent');
+            }
+          } else {
+            if (onPodium1 || onPodium2) {
+              setPlushieVisualMode(plushieMesh, 'opaque');
+            } else {
+              setPlushieVisualMode(plushieMesh, 'transparent');
+            }
+          }
+          return;
+        }
+
+        const isContestantInShow = isP1Contestant || isP2Contestant;
+        if (isContestantInShow) {
           setPlushieVisualMode(plushieMesh, 'opaque');
           return;
         }
 
-        const podium1Occupied = isP1Connected || isLocalOnPodium1;
-        const shouldBeSolid = onPodium1 || (onPodium2 && podium1Occupied);
+        const boardCenter = new THREE.Vector3(0, 0.44, 1.8);
+        const distFromBoardCenter = pos.distanceTo(boardCenter);
+        const inGameArea = (distFromBoardCenter < 3.8) || (pos.z < 3.2);
 
-        if (shouldBeSolid) {
-          setPlushieVisualMode(plushieMesh, 'opaque');
+        if (inGameArea) {
+          setPlushieVisualMode(plushieMesh, 'invisible');
         } else {
           setPlushieVisualMode(plushieMesh, 'transparent');
         }
@@ -3824,6 +4000,13 @@ plushiePosition.addScaledVector(plushieVelocity, delta);
                                 (!isSoloMode && !isVsGoodyMode && (isLocalOnPodium1 || isLocalOnPodium2));
 
       updatePlushieVisibility(localPlushie, isLocalOnPodium1 && isLocalContestant, isLocalOnPodium2 && isLocalContestant);
+
+      remotePlushies.forEach((entry) => {
+        const rPos = entry.mesh.position;
+        const rOnP1 = rPos.distanceTo(p1Pos) < 0.65;
+        const rOnP2 = rPos.distanceTo(p2Pos) < 0.65;
+        updatePlushieVisibility(entry.mesh, rOnP1, rOnP2);
+      });
 
       if (playerPlushie1) {
         const isP1InGame = studioPower && isP1Connected;
@@ -3838,34 +4021,12 @@ plushiePosition.addScaledVector(plushieVelocity, delta);
         updatePlushieVisibility(sp, false, false);
       });
 
-      const camRot = camera.quaternion;
-     
-      if (localPlushie && localPlushie.userData && localPlushie.userData.badgeMesh) {
-        const badge = localPlushie.userData.badgeMesh;
-        badge.position.copy(localPlushie.position).add(new THREE.Vector3(0, 0.95, 0));
-        badge.quaternion.copy(camRot);
-      }
-
-      remotePlayers.forEach((pMesh, id) => {
-        if (pMesh && pMesh.userData && pMesh.userData.badgeMesh) {
-          const badge = pMesh.userData.badgeMesh;
-          badge.position.copy(pMesh.position).add(new THREE.Vector3(0, 0.95, 0));
-          badge.quaternion.copy(camera.quaternion);
-        }
-      });
-
       if (pawn1 && pawn1.userData && pawn1.userData.badgeMesh) {
-        pawn1.userData.badgeMesh.quaternion.copy(camRot);
+        pawn1.userData.badgeMesh.quaternion.copy(camera.quaternion);
       }
       if (pawn2 && pawn2.userData && pawn2.userData.badgeMesh) {
-        pawn2.userData.badgeMesh.quaternion.copy(camRot);
+        pawn2.userData.badgeMesh.quaternion.copy(camera.quaternion);
       }
-
-      spectatorPlushies.forEach(sp => {
-        if (sp && sp.userData && sp.userData.badgeMesh) {
-          sp.userData.badgeMesh.quaternion.copy(camRot);
-        }
-      });
 
       if (studioPower) {
         updateCameraAlignment();
@@ -3881,82 +4042,6 @@ plushiePosition.addScaledVector(plushieVelocity, delta);
 
       renderer.render(scene, camera);
     }
-
-    const btnUp = document.getElementById('btn-up');
-    const btnDown = document.getElementById('btn-down');
-    const btnLeft = document.getElementById('btn-left');
-    const btnRight = document.getElementById('btn-right');
-
-    function bindTouchButton(elem, stateKey, btnElement) {
-      if (!elem) return;
-      let activeTouchId = null;
-
-      const activate = (e) => {
-        e.preventDefault();
-        const touch = e.changedTouches ? e.changedTouches[0] : null;
-        if (touch) activeTouchId = touch.identifier;
-
-        moveState[stateKey] = true;
-        btnElement.classList.add('active');
-      };
-
-      const deactivate = (e) => {
-        e.preventDefault();
-        if (e.changedTouches && activeTouchId !== null) {
-          const released = Array.from(e.changedTouches).find(t => t.identifier === activeTouchId);
-          if (!released && e.type !== 'touchcancel') return;
-        }
-        activeTouchId = null;
-        moveState[stateKey] = false;
-        btnElement.classList.remove('active');
-      };
-
-      elem.addEventListener('touchstart', activate, { passive: false });
-      elem.addEventListener('touchend', deactivate, { passive: false });
-      elem.addEventListener('touchcancel', deactivate, { passive: false });
-      elem.addEventListener('mousedown', activate);
-      elem.addEventListener('mouseup', deactivate);
-      elem.addEventListener('mouseleave', deactivate);
-    }
-
-    bindTouchButton(btnUp, 'forward', btnUp);
-    bindTouchButton(btnDown, 'backward', btnDown);
-    bindTouchButton(btnLeft, 'turnLeft', btnLeft);
-    bindTouchButton(btnRight, 'turnRight', btnRight);
-
-    let touchStartX = null;
-    let touchStartY = null;
-    let isSwipingScreen = false;
-
-    window.addEventListener('touchstart', (e) => {
-      if (e.target.closest('#mobile-dpad') || e.target.closest('#look-pad') || e.target.closest('#hud') || e.target.closest('#mode-banner')) return;
-      if (e.touches.length > 0) {
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        isSwipingScreen = true;
-      }
-    }, { passive: true });
-
-    window.addEventListener('touchmove', (e) => {
-      if (!isSwipingScreen || touchStartX === null || touchStartY === null) return;
-      if (e.touches.length > 0) {
-        const currentX = e.touches[0].clientX;
-        const deltaX = currentX - touchStartX;
-
-        const turnSensitivity = 0.008;
-        plushieRotation.yaw -= deltaX * turnSensitivity;
-
-        touchStartX = currentX;
-        touchStartY = e.touches[0].clientY;
-      }
-    }, { passive: true });
-
-    window.addEventListener('touchend', () => {
-      isSwipingScreen = false;
-      touchStartX = null;
-      touchStartY = null;
-    });
-
     animate();
   </script>
 </body>
