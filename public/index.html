@@ -923,11 +923,11 @@ socket.on('remote_client_action', (action) => {
       // Hide the dropped player's podium & pawn
       if (contestantId === "goody-contestant-1") {
         lockedP1SocketId = null;
-        if (window.p1PodiumGroup) window.p1PodiumGroup.visible = false;
+        if (window.p1PodiumGroup) window.p1PodiumGroup.visible = true; // Keep podium base visible for next game
         if (typeof pawn1 !== 'undefined') pawn1.visible = false;
       } else {
         lockedP2SocketId = null;
-        if (window.p2PodiumGroup) window.p2PodiumGroup.visible = false;
+        if (window.p2PodiumGroup) window.p2PodiumGroup.visible = true;
         if (typeof pawn2 !== 'undefined') pawn2.visible = false;
       }
 
@@ -935,7 +935,7 @@ socket.on('remote_client_action', (action) => {
       const bothDropped = !lockedP1SocketId && !lockedP2SocketId;
 
       if (bothDropped) {
-        // Full Studio Reset
+        // Full Studio Reset & Perfect Loop
         studioPower = false;
         gameState = "MODE_PROMPT";
         p1Index = 0;
@@ -946,8 +946,13 @@ socket.on('remote_client_action', (action) => {
         renderStageQuestionBoard();
         pushAuthoritativeState();
 
-        const resetSpeech = "Both contestants have disconnected! We are resetting the studio. Step back onto Podium 1 to restart the show!";
-        speakGoody(resetSpeech);
+        const finalSpeech = "Both contestants have disconnected! Goodnight everyone! Studio powering down... Podium 1 is now open for a new game!";
+        speakGoody(finalSpeech, () => {
+          // Re-trigger the initial welcoming prompt so the next player gets invited in
+          if (isLocalHost && !studioPower) {
+            triggerImmediateModePrompt();
+          }
+        });
         return;
       }
 
