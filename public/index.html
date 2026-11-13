@@ -2414,26 +2414,6 @@ miniDiorama.position.set(0, 3.95, -9);
 
 // --- GRAND CINEMA THEATER HUB ---
 const cinemaHubGroup = new THREE.Group();
-cinemaHubGroup.position.set(0, -0.2, -2.5); // Aligned directly to wrap around the game show base
-scene.add(cinemaHubGroup);
-
-// Tiered Amphitheater Seating (Gladiator/Colosseum Style)
-for (let r = 0; r < 7; r++) {
-  const tierRadius = 6.2 + (r * 1.3);
-  const tierStep = new THREE.Mesh(
-    new THREE.CylinderGeometry(tierRadius, tierRadius + 1.2, 0.45, 32, 1, true, -Math.PI * 0.78, Math.PI * 1.56),
-    new THREE.MeshStandardMaterial({ color: 0x1b0c30, roughness: 0.4, metalness: 0.3 })
-  );
-  // Stack each row higher and further back so it forms steep stadium steps
-  tierStep.position.set(0, 0.15 + (r * 0.55), r * 1.1);
-  cinemaHubGroup.add(tierStep);
-}
-
-const miniDiorama = new THREE.Group(); 
-miniDiorama.position.set(0, 3.95, -9);
-
-// --- GRAND CINEMA THEATER HUB ---
-const cinemaHubGroup = new THREE.Group();
 cinemaHubGroup.position.set(0, -0.4, -3.0); 
 scene.add(cinemaHubGroup);
 
