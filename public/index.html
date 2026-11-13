@@ -3365,7 +3365,8 @@ function createCutePlushie(color) {
   return pGroup;
 }
 function setPlushieVisualMode(group, mode) {
-  if (!group) return;
+  if (!group || group.userData.visualMode === mode) return;
+  group.userData.visualMode = mode;
   if (mode === 'invisible') {
     group.visible = false;
     return;
@@ -3831,9 +3832,10 @@ const isPlayerTurnRoll = gameState === "IN_PLAY" && !hasPlayerRolledThisTurn && 
   const camTargetZ = plushieWorldPos.z + Math.cos(plushieRotation.yaw) * 3.2;
   const camTargetY = plushieWorldPos.y + 1.6;
 
-  camera.position.x += (camTargetX - camera.position.x) * 0.1;
-  camera.position.y += (camTargetY - camera.position.y) * 0.1;
-  camera.position.z += (camTargetZ - camera.position.z) * 0.1;
+  const camSmooth = 1.0 - Math.exp(-18.0 * delta);
+  camera.position.x += (camTargetX - camera.position.x) * camSmooth;
+  camera.position.y += (camTargetY - camera.position.y) * camSmooth;
+  camera.position.z += (camTargetZ - camera.position.z) * camSmooth;
 
   camera.lookAt(plushieWorldPos.x, plushieWorldPos.y + 0.6, plushieWorldPos.z);
 
