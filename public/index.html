@@ -1338,23 +1338,16 @@ socket.on('remote_client_action', (action) => {
     const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 150);
     camera.position.set(0, 5.8, -5.0);
 
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 900;
     const canvas = document.getElementById('canvas3d');
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, powerPreference: "high-performance" });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
 
     const canvasPlayer1 = document.createElement('canvas');
     canvasPlayer1.width = 640; canvasPlayer1.height = 360;
-    const rendererPlayer1 = new THREE.WebGLRenderer({ canvas: canvasPlayer1, antialias: true });
-
     const canvasPlayer2 = document.createElement('canvas');
     canvasPlayer2.width = 640; canvasPlayer2.height = 360;
-    const rendererPlayer2 = new THREE.WebGLRenderer({ canvas: canvasPlayer2, antialias: true });
-
-    const camPlayer1 = new THREE.PerspectiveCamera(65, 16 / 9, 0.1, 100);
-    const camPlayer2 = new THREE.PerspectiveCamera(65, 16 / 9, 0.1, 100);
-
     const streamPlayer1 = canvasPlayer1.captureStream(30);
     const streamPlayer2 = canvasPlayer2.captureStream(30);
 
@@ -2387,14 +2380,14 @@ trussGroup.add(trussArch);
 function createDownFacingSpotlight(colorHex, x, y, z) {
   const fixGroup = new THREE.Group(); fixGroup.position.set(x, y, z);
   const headPivot = new THREE.Group();
-  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.55, 16), new THREE.MeshStandardMaterial({ color: 0x15151e }));
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.55, 12), new THREE.MeshLambertMaterial({ color: 0x15151e }));
   can.rotation.x = Math.PI / 2; headPivot.add(can);
-  const lens = new THREE.Mesh(new THREE.CircleGeometry(0.19, 16), new THREE.MeshBasicMaterial({ color: 0x050505 }));
+  const lens = new THREE.Mesh(new THREE.CircleGeometry(0.19, 12), new THREE.MeshBasicMaterial({ color: 0x050505 }));
   lens.position.set(0, 0, 0.28); headPivot.add(lens);
-  const spot = new THREE.SpotLight(colorHex, 0, 18, Math.PI / 3.4, 0.35);
-  spot.position.set(0, 0, 0.28); headPivot.add(spot);
-  const targetObj = new THREE.Object3D(); targetObj.position.set(x * 0.4, -4.5, -0.8);
-  scene.add(targetObj); spot.target = targetObj;
+  const spot = new THREE.PointLight(colorHex, 0, 14);
+  spot.position.set(x * 0.4, -3.5, -0.8);
+  scene.add(spot);
+  const targetObj = { position: spot.position };
   headPivot.rotation.x = Math.PI * 0.35;
   fixGroup.add(headPivot); trussGroup.add(fixGroup);
   return { spot, lens, color: colorHex, target: targetObj };
@@ -3336,29 +3329,41 @@ bindMobileHoldButton('btn-m-back', 'backward');
 bindMobileHoldButton('btn-m-left', 'turnLeft');
 bindMobileHoldButton('btn-m-right', 'turnRight');
 
+const _sharedPlushGeo = {
+  body: new THREE.SphereGeometry(0.28, 10, 10),
+  head: new THREE.SphereGeometry(0.22, 10, 10),
+  ear: new THREE.SphereGeometry(0.08, 8, 8),
+  blush: new THREE.SphereGeometry(0.038, 6, 6),
+  eye: new THREE.SphereGeometry(0.032, 6, 6),
+  shine: new THREE.SphereGeometry(0.012, 6, 6),
+  snout: new THREE.SphereGeometry(0.042, 6, 6),
+  mouth: new THREE.TorusGeometry(0.03, 0.007, 4, 6, Math.PI),
+  blushMat: new THREE.MeshBasicMaterial({ color: 0xff69b4 }),
+  eyeBlackMat: new THREE.MeshBasicMaterial({ color: 0x111111 }),
+  eyeWhiteMat: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+  snoutMat: new THREE.MeshLambertMaterial({ color: 0xff8fab }),
+  mouthMat: new THREE.MeshBasicMaterial({ color: 0x222222 })
+};
+
 function createCutePlushie(color) {
   const pGroup = new THREE.Group();
-  const pMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.95 });
-  const pBody = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 14), pMat); pBody.position.y = 0.28; pGroup.add(pBody);
-  const pHead = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 14), pMat); pHead.position.y = 0.58; pGroup.add(pHead);
-  const ear1 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), pMat); ear1.position.set(-0.14, 0.74, 0);
-  const ear2 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10), pMat); ear2.position.set(0.14, 0.74, 0); pGroup.add(ear1, ear2);
-  const blushMat = new THREE.MeshBasicMaterial({ color: 0xff69b4 });
-  const blush1 = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), blushMat); blush1.position.set(-0.11, 0.54, 0.17);
-  const blush2 = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), blushMat); blush2.position.set(0.11, 0.54, 0.17); pGroup.add(blush1, blush2);
-  const eyeBlackMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-  const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), eyeBlackMat); eyeL.position.set(-0.07, 0.60, 0.19);
-  const shineL = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), eyeWhiteMat); shineL.position.set(-0.08, 0.612, 0.21); pGroup.add(eyeL, shineL);
-  const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), eyeBlackMat); eyeR.position.set(0.07, 0.60, 0.19);
-  const shineR = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), eyeWhiteMat); shineR.position.set(0.06, 0.612, 0.21); pGroup.add(eyeR, shineR);
-  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 8), new THREE.MeshStandardMaterial({ color: 0xff8fab, roughness: 0.6 }));
+  const pMat = new THREE.MeshLambertMaterial({ color: color });
+  const pBody = new THREE.Mesh(_sharedPlushGeo.body, pMat); pBody.position.y = 0.28; pGroup.add(pBody);
+  const pHead = new THREE.Mesh(_sharedPlushGeo.head, pMat); pHead.position.y = 0.58; pGroup.add(pHead);
+  const ear1 = new THREE.Mesh(_sharedPlushGeo.ear, pMat); ear1.position.set(-0.14, 0.74, 0);
+  const ear2 = new THREE.Mesh(_sharedPlushGeo.ear, pMat); ear2.position.set(0.14, 0.74, 0); pGroup.add(ear1, ear2);
+  const blush1 = new THREE.Mesh(_sharedPlushGeo.blush, _sharedPlushGeo.blushMat); blush1.position.set(-0.11, 0.54, 0.17);
+  const blush2 = new THREE.Mesh(_sharedPlushGeo.blush, _sharedPlushGeo.blushMat); blush2.position.set(0.11, 0.54, 0.17); pGroup.add(blush1, blush2);
+  const eyeL = new THREE.Mesh(_sharedPlushGeo.eye, _sharedPlushGeo.eyeBlackMat); eyeL.position.set(-0.07, 0.60, 0.19);
+  const shineL = new THREE.Mesh(_sharedPlushGeo.shine, _sharedPlushGeo.eyeWhiteMat); shineL.position.set(-0.08, 0.612, 0.21); pGroup.add(eyeL, shineL);
+  const eyeR = new THREE.Mesh(_sharedPlushGeo.eye, _sharedPlushGeo.eyeBlackMat); eyeR.position.set(0.07, 0.60, 0.19);
+  const shineR = new THREE.Mesh(_sharedPlushGeo.shine, _sharedPlushGeo.eyeWhiteMat); shineR.position.set(0.06, 0.612, 0.21); pGroup.add(eyeR, shineR);
+  const snout = new THREE.Mesh(_sharedPlushGeo.snout, _sharedPlushGeo.snoutMat);
   snout.scale.set(1.2, 0.8, 1); snout.position.set(0, 0.56, 0.21); pGroup.add(snout);
-  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.007, 4, 8, Math.PI), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+  const mouth = new THREE.Mesh(_sharedPlushGeo.mouth, _sharedPlushGeo.mouthMat);
   mouth.position.set(0, 0.525, 0.21); mouth.rotation.x = Math.PI * 0.1; pGroup.add(mouth);
   return pGroup;
 }
-
 function setPlushieVisualMode(group, mode) {
   if (!group) return;
   if (mode === 'invisible') {
@@ -3725,11 +3730,15 @@ function animate() {
   const time = performance.now();
   const delta = Math.min((time - prevTime) / 1000, 0.1);
 
-  renderBackstageScreens();
-  renderGoodyFace(time);
+if (!window._lastScreenTexTime || time - window._lastScreenTexTime > 80) {
+    window._lastScreenTexTime = time;
+    renderBackstageScreens();
+    renderGoodyFace(time);
+  }
 
-  const isPlayerTurnRoll = gameState === "IN_PLAY" && !hasPlayerRolledThisTurn && (isSoloMode ? activePlayer === soloPlayerId : activePlayer !== goodyPlayerSlot);
-  if (gameState === "OPENING_DUEL" || isPlayerTurnRoll) {
+const isPlayerTurnRoll = gameState === "IN_PLAY" && !hasPlayerRolledThisTurn && (isSoloMode ? activePlayer === soloPlayerId : activePlayer !== goodyPlayerSlot);
+  if ((gameState === "OPENING_DUEL" || isPlayerTurnRoll) && (!window._lastDiceBoardTime || time - window._lastDiceBoardTime > 65)) {
+    window._lastDiceBoardTime = time;
     renderStageQuestionBoard();
   }
 
