@@ -2409,23 +2409,23 @@
       fixtureMagenta.lens.material.color.setHex(power ? fixtureMagenta.color : 0x050505);
     }
 
-const miniDiorama = new THREE.Group(); miniDiorama.position.set(0, 7.0, -9);
+    const miniDiorama = new THREE.Group(); miniDiorama.position.set(0, 3.95, -9);
 
     // --- GRAND CINEMA THEATER HUB ---
-const cinemaHubGroup = new THREE.Group();
-cinemaHubGroup.position.set(0, 0, -10); // <-- Change the Y value here (currently 0)
-scene.add(cinemaHubGroup);
+    const cinemaHubGroup = new THREE.Group();
+    cinemaHubGroup.position.set(0, 0, -10);
+    scene.add(cinemaHubGroup);
 
-// Tiered Seating Rows (Amphitheater steps)
-for (let r = 0; r < 6; r++) {
-  const tierRadius = 7 + (r * 1.8);
-  const tierStep = new THREE.Mesh(
-    new THREE.CylinderGeometry(tierRadius, tierRadius + 1.6, 0.35, 32, 1, true, -Math.PI * 0.75, Math.PI * 1.5),
-    new THREE.MeshStandardMaterial({ color: 0x1b0c30, roughness: 0.5, metalness: 0.2 })
-  );
-  tierStep.position.set(0, 0.2 + (r * 0.32), 4);
-  cinemaHubGroup.add(tierStep);
-}
+    // Tiered Seating Rows (Amphitheater steps)
+    for (let r = 0; r < 6; r++) {
+      const tierRadius = 7 + (r * 1.8);
+      const tierStep = new THREE.Mesh(
+        new THREE.CylinderGeometry(tierRadius, tierRadius + 1.6, 0.35, 32, 1, true, -Math.PI * 0.75, Math.PI * 1.5),
+        new THREE.MeshStandardMaterial({ color: 0x1b0c30, roughness: 0.5, metalness: 0.2 })
+      );
+      tierStep.position.set(0, 0.5 + (r * 0.32), 4);
+      cinemaHubGroup.add(tierStep);
+    }
 
     // Giant Front Cinema Screen
     const bigCinemaCanvas = document.createElement('canvas');
