@@ -2400,41 +2400,37 @@
     miniDiorama.add(miniWall);
 
     // ==========================================
-    // SOLID DIVIDER WALL BETWEEN STUDIO & CINEMA
-    // ==========================================
-    const dividerWall = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 5.0, 16.0),
-      new THREE.MeshStandardMaterial({ color: 0x0b0416, roughness: 0.9 })
-    );
-    dividerWall.position.set(9.5, 2.65, -9.0);
-    scene.add(dividerWall);
-
-    // ==========================================
-    // ROOM NEXT DOOR (ANNEX CINEMA WITH PERSISTENT 3D CSS3D YOUTUBE SCREEN)
-    // ==========================================
-    const annexRoomGroup = new THREE.Group();
-    annexRoomGroup.position.set(18.0, 3.95, -9);
-
-    const annexFloor = new THREE.Mesh(
-      new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48),
-      new THREE.MeshStandardMaterial({ color: 0x180b2e })
-    );
-    annexFloor.position.y = 0.44;
-    annexRoomGroup.add(annexFloor);
-
-    // ==========================================
-// ANNEX CINEMA CIRCULAR ENCLOSURE (SOLID & GHOSTABLE)
+// TALLER DIVIDER WALL WITH A SINGLE DOORWAY AT ONE END
 // ==========================================
-const annexWall = new THREE.Mesh(
-  new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true),
-  new THREE.MeshStandardMaterial({ 
-    color: 0x0b0416, 
-    side: THREE.DoubleSide, // <-- Renders solid from BOTH inside and outside!
-    roughness: 0.9 
-  })
+const dividerGroup = new THREE.Group();
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x0b0416, roughness: 0.9 });
+
+const wallX = 9.5;
+const wallHeight = 8.0;
+const wallThickness = 0.5;
+
+// Total wall span: z = -1.0 to z = -17.0 (Total length = 16.0 units)
+// Single doorway opening at the front end: z = -3.0 to z = -1.0 (Width = 2.0 units)
+// Solid wall section: z = -17.0 to z = -3.0 (Length = 14.0 units)
+
+// 1. Long Solid Wall Section (from z = -17.0 to z = -3.0)
+const solidWall = new THREE.Mesh(
+  new THREE.BoxGeometry(wallThickness, wallHeight, 14.0),
+  wallMat
 );
-annexWall.position.y = 2.65;
-annexRoomGroup.add(annexWall);
+solidWall.position.set(wallX, wallHeight / 2, -10.0);
+dividerGroup.add(solidWall);
+
+// 2. Lintel / Top Section above the doorway (spanning z = -3.0 to z = -1.0, height from y = 5.0 to y = 8.0)
+const lintelHeight = wallHeight - 5.0;
+const lintel = new THREE.Mesh(
+  new THREE.BoxGeometry(wallThickness, lintelHeight, 2.0),
+  wallMat
+);
+lintel.position.set(wallX, 5.0 + lintelHeight / 2, -2.0);
+dividerGroup.add(lintel);
+
+scene.add(dividerGroup);
 
     // Persistent 3D CSS3D YouTube Screen inside Annex Room with enablejsapi=1[cite: 1]
     const ytContainer = document.createElement('div');
@@ -3823,17 +3819,20 @@ annexRoomGroup.add(annexWall);
         }
 
         plushiePosition.x = Math.max(-6.5, Math.min(25.0, plushiePosition.x));
-        plushiePosition.z = Math.max(-6.5, Math.min(6.5, plushiePosition.z));
+plushiePosition.z = Math.max(-6.5, Math.min(6.5, plushiePosition.z));
 
-        if (lockedP1SocketId && lockedP1SocketId !== selfSocketId) {
-          const dx1 = plushiePosition.x - p1Pos.x;
-          const dz1 = plushiePosition.z - p1Pos.z;
-          const d1 = Math.hypot(dx1, dz1);
-          if (d1 < 0.78 && d1 > 0.0001) {
-            plushiePosition.x = p1Pos.x + (dx1 / d1) * 0.78;
-            plushiePosition.z = p1Pos.z + (dz1 / d1) * 0.78;
-          }
-        }
+// --- ADD OR UPDATE YOUR WALL COLLISION CHECK HERE ---
+if (Math.abs(plushiePosition.x - 9.5) < 0.6) {
+  // Allow passing ONLY through the doorway opening (z between -3.0 and -1.0)
+  if (plushiePosition.z >= -3.0 && plushiePosition.z <= -1.0) {
+    // Avatar is inside the doorway range — allow passage into the cinema annex
+  } else {
+    // Blocked by the solid wall — keep avatar on the studio side
+    if (plushiePosition.x > 9.2) {
+      plushiePosition.x = 9.2;
+    }
+  }
+}
         if (lockedP2SocketId && lockedP2SocketId !== selfSocketId) {
           const dx2 = plushiePosition.x - p2Pos.x;
           const dz2 = plushiePosition.z - p2Pos.z;
