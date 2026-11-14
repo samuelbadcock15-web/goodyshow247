@@ -2403,10 +2403,10 @@
     // SOLID DIVIDER WALL BETWEEN STUDIO & CINEMA
     // ==========================================
     const dividerWall = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 5.0, 16.0),
+      new THREE.BoxGeometry(0.5, 12.0, 16.0), // Increased height to 12.0
       new THREE.MeshStandardMaterial({ color: 0x0b0416, roughness: 0.9 })
     );
-    dividerWall.position.set(9.5, 2.65, -9.0);
+    dividerWall.position.set(9.5, 5.0, -9.0); // Adjusted center Y position for the taller wall
     scene.add(dividerWall);
 
     // ==========================================
@@ -3814,9 +3814,6 @@
           plushiePosition.z += Math.cos(plushieRotation.yaw) * moveSpeed;
           movedThisFrame = true;
         }
-
-        plushiePosition.x = Math.max(-6.5, Math.min(25.0, plushiePosition.x));
-        plushiePosition.z = Math.max(-6.5, Math.min(6.5, plushiePosition.z));
 
         if (lockedP1SocketId && lockedP1SocketId !== selfSocketId) {
           const dx1 = plushiePosition.x - p1Pos.x;
