@@ -2422,12 +2422,19 @@
     annexFloor.position.y = 0.44;
     annexRoomGroup.add(annexFloor);
 
-    const annexWall = new THREE.Mesh(
-      new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI, Math.PI * 2),
-      new THREE.MeshStandardMaterial({ color: 0x0b0416, side: THREE.BackSide })
-    );
-    annexWall.position.y = 2.65;
-    annexRoomGroup.add(annexWall);
+    // ==========================================
+// ANNEX CINEMA CIRCULAR ENCLOSURE (SOLID & GHOSTABLE)
+// ==========================================
+const annexWall = new THREE.Mesh(
+  new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true),
+  new THREE.MeshStandardMaterial({ 
+    color: 0x0b0416, 
+    side: THREE.DoubleSide, // <-- Renders solid from BOTH inside and outside!
+    roughness: 0.9 
+  })
+);
+annexWall.position.y = 2.65;
+annexRoomGroup.add(annexWall);
 
     // Persistent 3D CSS3D YouTube Screen inside Annex Room with enablejsapi=1[cite: 1]
     const ytContainer = document.createElement('div');
