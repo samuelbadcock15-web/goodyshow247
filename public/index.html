@@ -3774,38 +3774,37 @@ annexRoomGroup.position.set(18.0, 3.95, -9);
     });
 
     let prevTime = performance.now();
-    // --- CINEMA & STUDIO ZONE AUDIO/SCREEN SWITCHER ---
-    const isinCinemaAnnex = (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0);
-    const cinemaOverlay = document.getElementById('cinema-overlay');
-    const cinemaIframe = document.getElementById('cinema-iframe');
 
-    if (isinCinemaAnnex) {
-      // 1. Instantly silence game show speech/audio when in cinema
-      if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
-      }
-
-      // 2. Auto-turn on Cinema Screen & load YouTube film (Brothers)
-      if (cinemaOverlay && cinemaOverlay.style.display !== 'block') {
-        cinemaOverlay.style.display = 'block';
-        cinemaIframe.src = "https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1";
-      }
-    } else {
-      // Back in Game Show Studio: Hide cinema overlay & stop video/audio
-      if (cinemaOverlay && cinemaOverlay.style.display !== 'none') {
-        cinemaOverlay.style.display = 'none';
-        cinemaIframe.src = ""; 
-      }
-    }
     function animate() {
       requestAnimationFrame(animate);
       const time = performance.now();
       const delta = Math.min((time - prevTime) / 1000, 0.1);
-if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
+
+      // --- CINEMA & STUDIO ZONE AUDIO/SCREEN SWITCHER (RUNS 60FPS) ---
+      const isinCinemaAnnex = (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0);
+      const cinemaOverlay = document.getElementById('cinema-overlay');
+      const cinemaIframe = document.getElementById('cinema-iframe');
+
+      if (isinCinemaAnnex) {
+        // 1. Instantly silence game show speech/audio when in cinema
         if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
           window.speechSynthesis.cancel();
         }
+
+        // 2. Auto-turn on Cinema Screen & load YouTube film (Brothers)
+        if (cinemaOverlay && cinemaOverlay.style.display !== 'block') {
+          cinemaOverlay.style.display = 'block';
+          cinemaIframe.src = "https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1";
+        }
+      } else {
+        // Back in Game Show Studio: Hide cinema overlay & stop video/audio
+        if (cinemaOverlay && cinemaOverlay.style.display !== 'none') {
+          cinemaOverlay.style.display = 'none';
+          cinemaIframe.src = ""; 
+        }
       }
+      // -------------------------------------------------------------
+
       if (!window._lastScreenTexTime || time - window._lastScreenTexTime > 80) {
         window._lastScreenTexTime = time;
         renderBackstageScreens();
@@ -3902,7 +3901,7 @@ if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
           entry.mesh.userData.nameTagMesh.quaternion.copy(camera.quaternion);
         }
       });
-
+    }
       const camTargetX = plushieWorldPos.x + Math.sin(plushieRotation.yaw) * 3.2;
       const camTargetZ = plushieWorldPos.z + Math.cos(plushieRotation.yaw) * 3.2;
       const camTargetY = plushieWorldPos.y + 1.6;
