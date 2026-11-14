@@ -2415,25 +2415,25 @@
     annexRoomGroup.add(annexWall);
 
     // Persistent 3D CSS3D YouTube Screen inside Annex Room
-const ytContainer = document.createElement('div');
-ytContainer.style.width = '800px';
-ytContainer.style.height = '450px';
-ytContainer.style.background = '#000';
-ytContainer.style.border = '6px solid #00f0ff';
-ytContainer.style.borderRadius = '16px';
-ytContainer.style.boxShadow = '0 0 40px rgba(0,240,255,0.6)';
-ytContainer.style.overflow = 'hidden';
+    const ytContainer = document.createElement('div');
+    ytContainer.style.width = '800px';
+    ytContainer.style.height = '450px';
+    ytContainer.style.background = '#000';
+    ytContainer.style.border = '6px solid #00f0ff';
+    ytContainer.style.borderRadius = '16px';
+    ytContainer.style.boxShadow = '0 0 40px rgba(0,240,255,0.6)';
+    ytContainer.style.overflow = 'hidden';
 
-// Create the iframe inside the container
-const ytIframe = document.createElement('iframe');
-ytIframe.style.width = '100%';
-ytIframe.style.height = '100%';
-ytIframe.style.border = 'none';
-ytIframe.src = 'https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1'; // Initial load
-ytContainer.appendChild(ytIframe);
+    const ytIframe = document.createElement('iframe');
+    ytIframe.width = '100%';
+    ytIframe.height = '100%';
+    ytIframe.src = 'https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1';
+    ytIframe.frameBorder = '0';
+    ytIframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+    ytIframe.allowFullscreen = true;
+    ytContainer.appendChild(ytIframe);
 
-// Create your CSS3DObject
-const css3DObject = new THREE.CSS3DObject(ytContainer);
+    const css3DObject = new THREE.CSS3DObject(ytContainer);
     css3DObject.position.set(18.0, 6.25, -13.6);
     css3DObject.scale.set(0.007, 0.007, 0.007);
     scene.add(css3DObject);
