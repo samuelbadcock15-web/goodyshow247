@@ -1306,8 +1306,8 @@
     scene.background = new THREE.Color(0x040208);
     scene.fog = new THREE.FogExp2(0x040208, 0.015);
 
-    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 150);
-camera.position.set(0, 7.5, -8.5);
+   const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 150);
+camera.position.set(18.0, 6.2, -5.0);
 
     const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 900;
     const canvas = document.getElementById('canvas3d');
@@ -3332,7 +3332,7 @@ camera.position.set(0, 7.5, -8.5);
     });
 
     const moveState = { forward: false, backward: false, turnLeft: false, turnRight: false };
-    const plushiePosition = new THREE.Vector3(18.0, 0.44, -9.0);
+    const plushiePosition = new THREE.Vector3(18.0, 0.44, 2.0);
     const plushieRotation = { yaw: 0 };
 
     const annexCenter = new THREE.Vector3(18.0, 0.44, -9.0);
