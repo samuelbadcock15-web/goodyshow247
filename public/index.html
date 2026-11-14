@@ -2426,7 +2426,9 @@
   new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI, Math.PI * 2),
   new THREE.MeshStandardMaterial({ 
     color: 0x0b0416, 
-    side: THREE.DoubleSide // Renders the wall from both the inside and outside!
+    side: THREE.DoubleSide,
+    transparent: false, // Ensures it's fully opaque from both sides
+    depthWrite: true    // Forces the GPU to write depth so it blocks vision reliably
   })
 );
     annexWall.position.y = 2.65;
