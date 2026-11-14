@@ -2391,13 +2391,13 @@
     feltCarpet.position.y = 0.44;
     miniDiorama.add(feltCarpet);
 
-    // Full 360-degree closed studio wall to block visibility of the annex cinema
-const miniWall = new THREE.Mesh(
-  new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, 0, Math.PI * 2), 
-  new THREE.MeshStandardMaterial({ color: 0x15092a, side: THREE.BackSide })
-);
-miniWall.position.y = 2.65; 
-miniDiorama.add(miniWall);
+    // Full 360-degree closed studio wall
+    const miniWall = new THREE.Mesh(
+      new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, 0, Math.PI * 2), 
+      new THREE.MeshStandardMaterial({ color: 0x15092a, side: THREE.BackSide })
+    );
+    miniWall.position.y = 2.65; 
+    miniDiorama.add(miniWall);
 
     // ==========================================
     // ROOM NEXT DOOR (ANNEX CINEMA WITH PERSISTENT 3D CSS3D YOUTUBE SCREEN)
@@ -2419,7 +2419,7 @@ miniDiorama.add(miniWall);
     annexWall.position.y = 2.65;
     annexRoomGroup.add(annexWall);
 
-    // Persistent 3D CSS3D YouTube Screen inside Annex Room
+    // Persistent 3D CSS3D YouTube Screen inside Annex Room with enablejsapi=1[cite: 1]
     const ytContainer = document.createElement('div');
     ytContainer.style.width = '800px';
     ytContainer.style.height = '450px';
@@ -2430,14 +2430,13 @@ miniDiorama.add(miniWall);
     ytContainer.style.overflow = 'hidden';
 
     const ytIframe = document.createElement('iframe');
-ytIframe.width = '100%';
-ytIframe.height = '100%';
-// Make sure &enablejsapi=1 is appended here:
-ytIframe.src = 'https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1&enablejsapi=1';
-ytIframe.frameBorder = '0';
-ytIframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-ytIframe.allowFullscreen = true;
-ytContainer.appendChild(ytIframe);
+    ytIframe.width = '100%';
+    ytIframe.height = '100%';
+    ytIframe.src = 'https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1&enablejsapi=1';
+    ytIframe.frameBorder = '0';
+    ytIframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+    ytIframe.allowFullscreen = true;
+    ytContainer.appendChild(ytIframe);
 
     const css3DObject = new THREE.CSS3DObject(ytContainer);
     css3DObject.position.set(18.0, 6.25, -13.6);
@@ -3326,10 +3325,8 @@ ytContainer.appendChild(ytIframe);
     const plushiePosition = new THREE.Vector3(-1.6, 0.44, -1.2);
     const plushieRotation = { yaw: 0 };
 
-    // --- ADDED ANNEX AUDIO SETTINGS ---
     const annexCenter = new THREE.Vector3(18.0, 0.44, -9.0);
     const audioCutoffRadius = 7.0; // Radius of the annex room
-    // ----------------------------------
 
     function bindMobileHoldButton(btnId, stateKey) {
       const el = document.getElementById(btnId);
@@ -3845,17 +3842,17 @@ ytContainer.appendChild(ytIframe);
 
       localPlushie.position.copy(plushiePosition);
       localPlushie.rotation.y = plushieRotation.yaw + Math.PI;
-const distToAnnex = plushiePosition.distanceTo(annexCenter);
 
+      // Annex Cinema Audio Distance Check
+      const distToAnnex = plushiePosition.distanceTo(annexCenter);
       if (ytIframe && ytIframe.contentWindow) {
         if (distToAnnex > audioCutoffRadius) {
-          // Too far away - fully mute YouTube audio
           ytIframe.contentWindow.postMessage('{"event":"command","func":"mute","args":""}', '*');
         } else {
-          // Inside or near the annex room - restore audio
           ytIframe.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}', '*');
         }
       }
+
       if (movedThisFrame) {
         emitLocalPlushiePosition(false);
       }
