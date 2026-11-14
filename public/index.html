@@ -3463,13 +3463,38 @@ annexRoomGroup.position.set(18.0, 3.95, -9);
     });
 
     const miniAudience = new THREE.Group();
-    let playerPlushie1 = createCutePlushie(0xff7675);
-    playerPlushie1.position.set(-4.5, 0.46, 2.0);
-    miniDiorama.add(playerPlushie1);
+    const plushColors = [0xff7675, 0x74b9ff, 0xa29bfe, 0xffbe76, 0x55efc4, 0xfd79a8, 0xf6e58d, 0x48dbfb, 0xff9ff3];
+    let playerPlushie1 = null;
+    let playerPlushie2 = null;
 
-    let playerPlushie2 = createCutePlushie(0x74b9ff);
-    playerPlushie2.position.set(4.5, 0.46, 2.0);
-    miniDiorama.add(playerPlushie2);
+    [5.7, 6.4].forEach((radius, rowIdx) => {
+      const count = rowIdx === 0 ? 14 : 18;
+      for (let i = 0; i < count; i++) {
+        const theta = -Math.PI * 0.65 + (i / (count - 1)) * (Math.PI * 1.30);
+
+        // This line punches a clean gap right in front of the main studio screen:
+        if (theta > -0.55 && theta < 0.55) continue;
+
+        const col = plushColors[(i + rowIdx * 3) % plushColors.length];
+        const pGroup = createCutePlushie(col);
+
+        const px = Math.sin(theta) * radius;
+        const pz = Math.cos(theta) * (radius * 0.95) + 0.8;
+        pGroup.position.set(px, 0.46 + rowIdx * 0.25, pz);
+        pGroup.lookAt(0, 1.8, -2.6);
+        pGroup.userData = {
+          initialY: pGroup.position.y,
+          phase: Math.random() * Math.PI * 2,
+          theta: theta,
+          radius: radius,
+          isAudienceSeat: true
+        };
+        miniDiorama.add(pGroup);
+
+        if (rowIdx === 0 && i === 4) playerPlushie1 = pGroup;
+        if (rowIdx === 0 && i === 9) playerPlushie2 = pGroup;
+      }
+    });
     miniDiorama.add(miniAudience);
 
     function handlePlushieMovement(contestant, direction) {
