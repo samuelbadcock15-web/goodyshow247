@@ -2391,8 +2391,13 @@
     feltCarpet.position.y = 0.44;
     miniDiorama.add(feltCarpet);
 
-    const miniWall = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI / 2, Math.PI), new THREE.MeshStandardMaterial({ color: 0x15092a, side: THREE.BackSide }));
-    miniWall.position.y = 2.65; miniDiorama.add(miniWall);
+    // Extended dark wall to block visibility of the annex cinema room
+const miniWall = new THREE.Mesh(
+  new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI * 0.75, Math.PI * 1.5), 
+  new THREE.MeshStandardMaterial({ color: 0x15092a, side: THREE.BackSide })
+);
+miniWall.position.y = 2.65; 
+miniDiorama.add(miniWall);
 
     // ==========================================
     // ROOM NEXT DOOR (ANNEX CINEMA WITH PERSISTENT 3D CSS3D YOUTUBE SCREEN)
