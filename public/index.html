@@ -2430,13 +2430,14 @@ miniDiorama.add(miniWall);
     ytContainer.style.overflow = 'hidden';
 
     const ytIframe = document.createElement('iframe');
-    ytIframe.width = '100%';
-    ytIframe.height = '100%';
-    ytIframe.src = 'https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1';
-    ytIframe.frameBorder = '0';
-    ytIframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-    ytIframe.allowFullscreen = true;
-    ytContainer.appendChild(ytIframe);
+ytIframe.width = '100%';
+ytIframe.height = '100%';
+// Add enablejsapi=1 to allow volume control via postMessage
+ytIframe.src = 'https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1&enablejsapi=1';
+ytIframe.frameBorder = '0';
+ytIframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+ytIframe.allowFullscreen = true;
+ytContainer.appendChild(ytIframe);
 
     const css3DObject = new THREE.CSS3DObject(ytContainer);
     css3DObject.position.set(18.0, 6.25, -13.6);
@@ -3324,6 +3325,11 @@ miniDiorama.add(miniWall);
     const moveState = { forward: false, backward: false, turnLeft: false, turnRight: false };
     const plushiePosition = new THREE.Vector3(-1.6, 0.44, -1.2);
     const plushieRotation = { yaw: 0 };
+
+    // --- ADDED ANNEX AUDIO SETTINGS ---
+    const annexCenter = new THREE.Vector3(18.0, 0.44, -9.0);
+    const audioCutoffRadius = 7.0; // Radius of the annex room
+    // ----------------------------------
 
     function bindMobileHoldButton(btnId, stateKey) {
       const el = document.getElementById(btnId);
