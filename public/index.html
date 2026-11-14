@@ -7582,46 +7582,25 @@ const isPlayerTurnRoll = gameState === "IN_PLAY" && !hasPlayerRolledThisTurn && 
 
 
   const isGameSessionActive = gameState !== "GAME_OVER" && (studioPower || gameState === "WAITING_FOR_P2" || !!lockedP1SocketId);
-
   const isLockedToP1 = isGameSessionActive && selfSocketId && lockedP1SocketId === selfSocketId;
-
   const isLockedToP2 = isGameSessionActive && selfSocketId && lockedP2SocketId === selfSocketId;
 
-
-
   const moveSpeed = 3.8 * delta;
-
   if (isLockedToP1) {
-
     plushiePosition.set(p1Pos.x, 0.58, p1Pos.z);
-
   } else if (isLockedToP2) {
-
     plushiePosition.set(p2Pos.x, 0.58, p2Pos.z);
-
   } else {
-
     if (moveState.forward) {
-
       plushiePosition.x -= Math.sin(plushieRotation.yaw) * moveSpeed;
-
       plushiePosition.z -= Math.cos(plushieRotation.yaw) * moveSpeed;
-
       movedThisFrame = true;
-
     }
-
     if (moveState.backward) {
-
       plushiePosition.x += Math.sin(plushieRotation.yaw) * moveSpeed;
-
       plushiePosition.z += Math.cos(plushieRotation.yaw) * moveSpeed;
-
       movedThisFrame = true;
-
     }
-
-
 
     plushiePosition.x = Math.max(-6.5, Math.min(6.5, plushiePosition.x));
     plushiePosition.z = Math.max(-6.5, Math.min(6.5, plushiePosition.z));
@@ -7657,78 +7636,29 @@ const isPlayerTurnRoll = gameState === "IN_PLAY" && !hasPlayerRolledThisTurn && 
   const dioramaWorldPos = new THREE.Vector3(0, 3.95, -9);
   const plushieWorldPos = plushiePosition.clone().add(dioramaWorldPos);
 
-    if (lockedP2SocketId && lockedP2SocketId !== selfSocketId) {
-
-      const dx2 = plushiePosition.x - p2Pos.x;
-
-      const dz2 = plushiePosition.z - p2Pos.z;
-
-      const d2 = Math.hypot(dx2, dz2);
-
-      if (d2 < 0.78 && d2 > 0.0001) {
-
-        plushiePosition.x = p2Pos.x + (dx2 / d2) * 0.78;
-
-        plushiePosition.z = p2Pos.z + (dz2 / d2) * 0.78;
-
-      }
-
-    }
-
-
-
-  const dioramaWorldPos = new THREE.Vector3(0, 3.95, -9);
-
-  const plushieWorldPos = plushiePosition.clone().add(dioramaWorldPos);
-
-
-
   const distP1 = plushiePosition.distanceTo(p1Pos);
-
   const distP2 = plushiePosition.distanceTo(p2Pos);
 
-
-
   if (distP1 < 0.65 || distP2 < 0.65) {
-
     plushiePosition.y = 0.58;
-
   } else {
-
     plushiePosition.y = 0.44;
-
   }
-
-
 
   localPlushie.position.copy(plushiePosition);
-
   localPlushie.rotation.y = plushieRotation.yaw + Math.PI;
 
-
-
   if (movedThisFrame) {
-
     emitLocalPlushiePosition(false);
-
   }
 
-
-
   // Smoothly interpolate all remote players' plushies across PC & Mobile
-
   remotePlushies.forEach((entry) => {
-
     entry.mesh.position.lerp(entry.targetPos, 0.25);
-
     entry.mesh.rotation.y += (entry.targetYaw - entry.mesh.rotation.y) * 0.25;
-
     if (entry.mesh.userData && entry.mesh.userData.nameTagMesh) {
-
       entry.mesh.userData.nameTagMesh.quaternion.copy(camera.quaternion);
-
     }
-
   });
 
 
