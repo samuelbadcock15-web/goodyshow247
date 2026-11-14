@@ -2423,22 +2423,17 @@
     annexRoomGroup.add(annexFloor);
 
     const annexWall = new THREE.Mesh(
-  new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI, Math.PI * 2),
-  new THREE.MeshStandardMaterial({ 
-    color: 0x0b0416, 
-    side: THREE.DoubleSide,
-    transparent: false, // Ensures it's fully opaque from both sides
-    depthWrite: true    // Forces the GPU to write depth so it blocks vision reliably
-  })
-);
+      new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI, Math.PI * 2),
+      new THREE.MeshStandardMaterial({ color: 0x0b0416, side: THREE.BackSide })
+    );
     annexWall.position.y = 2.65;
     annexRoomGroup.add(annexWall);
 
+    // Persistent 3D CSS3D YouTube Screen inside Annex Room with enablejsapi=1[cite: 1]
     const ytContainer = document.createElement('div');
-ytContainer.id = "annex-youtube-screen"; // <--- ADD THIS LINE HERE
-ytContainer.style.width = '800px';
-ytContainer.style.height = '450px';
-ytContainer.style.background = '#000';
+    ytContainer.style.width = '800px';
+    ytContainer.style.height = '450px';
+    ytContainer.style.background = '#000';
     ytContainer.style.border = '6px solid #00f0ff';
     ytContainer.style.borderRadius = '16px';
     ytContainer.style.boxShadow = '0 0 40px rgba(0,240,255,0.6)';
