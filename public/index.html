@@ -1601,7 +1601,8 @@
       if (videoPlayer2.srcObject) videoPlayer2.play();
     }
     function playTone(freq, type, duration, gainVal = 0.05) {
-      if (!audioCtx) return;
+  if (plushiePosition.x > 10.0) return; // Mute game sound effects in cinema room
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       try {
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
@@ -1614,12 +1615,15 @@
     }
 
     function speakGoody(text, onComplete) {
-      if (isLocalHost && socket && socket.connected) {
-        socket.emit('host_speak', { text });
-      }
-      connectedDataConns.forEach(c => {
-        if (c.open) c.send({ type: "HOST_SPEAK", text: text });
-      });
+  // Check if player is currently inside the cinema room annex
+  if (plushiePosition.x > 10.0) {
+    if (onComplete) onComplete();
+    return; // Mute Goody's voice when player is in the cinema room
+  }
+
+  if (isLocalHost && socket && socket.connected) {
+    socket.emit('host_speak', { text });
+  }
 
       if (!('speechSynthesis' in window)) {
         if (onComplete) onComplete();
@@ -2383,7 +2387,7 @@
     // ROOM NEXT DOOR (ANNEX STUDIO WITH ONE GIANT SCREEN)
     // ==========================================
     const annexRoomGroup = new THREE.Group();
-    annexRoomGroup.position.set(13.5, 3.95, -9);
+annexRoomGroup.position.set(18.0, 3.95, -9);
 
     const annexFloor = new THREE.Mesh(
       new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48),
@@ -3466,7 +3470,7 @@
     [5.7, 6.4].forEach((radius, rowIdx) => {
       const count = rowIdx === 0 ? 14 : 18;
       for (let i = 0; i < count; i++) {
-        const theta = -Math.PI * 0.65 + (i / (count - 1)) * (Math.PI * 1.30);
+        const theta = -Math.PI * 0.75 + (i / (count - 1)) * (Math.PI * 1.05);
         const col = plushColors[(i + rowIdx * 3) % plushColors.length];
         const pGroup = createCutePlushie(col);
 
