@@ -106,7 +106,10 @@
   </div>
 
   <canvas id="canvas3d"></canvas>
-
+<div id="cinema-overlay" style="display: none; position: fixed; top: 15%; left: 25%; width: 50%; height: 50%; z-index: 100; background: #000; border: 4px solid #00f0ff; border-radius: 12px; box-shadow: 0 0 30px rgba(0,240,255,0.5); overflow: hidden;">
+  <iframe id="cinema-iframe" width="100%" height="100%" src="" title="Brothers Film" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+  <div style="position: absolute; top: 5px; right: 10px; color: #fff; font-family: monospace; font-size: 12px; pointer-events: none;">CINEMA SCREEN • ACTIVE</div>
+</div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="https://goodyshow247.onrender.com/socket.io/socket.io.js"></script>
@@ -616,7 +619,7 @@
     function speakGoodyLocalOnly(text) {
       if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-        return;
+        return; // Mute local Goody voice in cinema
       }
       if (!('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
@@ -1606,7 +1609,7 @@
       if (videoPlayer2.srcObject) videoPlayer2.play();
     }
     function playTone(freq, type, duration, gainVal = 0.05) {
-  if (plushiePosition.x > 10.0) return; // Mute game sound effects in cinema room
+  if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) return; // Mute SFX in cinema
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       try {
         const osc = audioCtx.createOscillator();
@@ -1620,15 +1623,14 @@
     }
 
     function speakGoody(text, onComplete) {
-      if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
-        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-        if (onComplete) onComplete();
-        return; // Mute Goody's voice when player is in the cinema room
-      }
-
-      if (isLocalHost && socket && socket.connected) {
-        socket.emit('host_speak', { text });
-      }
+  if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    if (typeof onComplete === 'function') onComplete();
+    return; // Mute Goody voice in cinema
+  }
+  if (isLocalHost && socket && socket.connected) {
+    socket.emit('host_speak', { text });
+  }
       
       if (!('speechSynthesis' in window)) {
         if (onComplete) onComplete();
@@ -3772,6 +3774,29 @@ annexRoomGroup.position.set(18.0, 3.95, -9);
     });
 
     let prevTime = performance.now();
+    // --- CINEMA & STUDIO ZONE AUDIO/SCREEN SWITCHER ---
+    const isinCinemaAnnex = (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0);
+    const cinemaOverlay = document.getElementById('cinema-overlay');
+    const cinemaIframe = document.getElementById('cinema-iframe');
+
+    if (isinCinemaAnnex) {
+      // 1. Instantly silence game show speech/audio when in cinema
+      if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+      }
+
+      // 2. Auto-turn on Cinema Screen & load YouTube film (Brothers)
+      if (cinemaOverlay && cinemaOverlay.style.display !== 'block') {
+        cinemaOverlay.style.display = 'block';
+        cinemaIframe.src = "https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1";
+      }
+    } else {
+      // Back in Game Show Studio: Hide cinema overlay & stop video/audio
+      if (cinemaOverlay && cinemaOverlay.style.display !== 'none') {
+        cinemaOverlay.style.display = 'none';
+        cinemaIframe.src = ""; 
+      }
+    }
     function animate() {
       requestAnimationFrame(animate);
       const time = performance.now();
@@ -3828,7 +3853,7 @@ if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
           movedThisFrame = true;
         }
 
-        plushiePosition.x = Math.max(-6.5, Math.min(18.5, plushiePosition.x));
+        plushiePosition.x = Math.max(-6.5, Math.min(25.0, plushiePosition.x));
         plushiePosition.z = Math.max(-6.5, Math.min(6.5, plushiePosition.z));
 
         if (lockedP1SocketId && lockedP1SocketId !== selfSocketId) {
