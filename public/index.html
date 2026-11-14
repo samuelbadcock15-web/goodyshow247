@@ -2400,6 +2400,16 @@
     miniDiorama.add(miniWall);
 
     // ==========================================
+    // SOLID DIVIDER WALL BETWEEN STUDIO & CINEMA
+    // ==========================================
+    const dividerWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 5.0, 16.0),
+      new THREE.MeshStandardMaterial({ color: 0x0b0416, roughness: 0.9 })
+    );
+    dividerWall.position.set(9.5, 2.65, -9.0);
+    scene.add(dividerWall);
+
+    // ==========================================
     // ROOM NEXT DOOR (ANNEX CINEMA WITH PERSISTENT 3D CSS3D YOUTUBE SCREEN)
     // ==========================================
     const annexRoomGroup = new THREE.Group();
