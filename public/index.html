@@ -3776,7 +3776,11 @@ annexRoomGroup.position.set(18.0, 3.95, -9);
       requestAnimationFrame(animate);
       const time = performance.now();
       const delta = Math.min((time - prevTime) / 1000, 0.1);
-
+if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
+        if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
+          window.speechSynthesis.cancel();
+        }
+      }
       if (!window._lastScreenTexTime || time - window._lastScreenTexTime > 80) {
         window._lastScreenTexTime = time;
         renderBackstageScreens();
