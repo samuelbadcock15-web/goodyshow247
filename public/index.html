@@ -2399,18 +2399,18 @@
     miniWall.position.y = 2.65; 
     miniDiorama.add(miniWall);
 
-    // ==========================================
-    // SOLID DIVIDER WALL BETWEEN STUDIO & CINEMA
+   // ==========================================
+    // TALL SOLID DIVIDER WALL BETWEEN STUDIO & CINEMA
     // ==========================================
     const dividerWall = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 12.0, 30.0), // Increased width/depth span to 30.0
+      new THREE.BoxGeometry(0.5, 20.0, 40.0), // Made much taller (20.0) and longer (40.0)
       new THREE.MeshStandardMaterial({ 
         color: 0x0b0416, 
         roughness: 0.9,
-        side: THREE.DoubleSide // Ensures it's opaque from both sides
+        side: THREE.DoubleSide 
       })
     );
-    dividerWall.position.set(6.8, 5.0, -2.0); // Moved closer and centered to block the view
+    dividerWall.position.set(8.5, 8.0, -9.0); // Centered to block all vertical sightlines
     scene.add(dividerWall);
 
     // ==========================================
