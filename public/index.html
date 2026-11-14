@@ -1307,7 +1307,7 @@
     scene.fog = new THREE.FogExp2(0x040208, 0.015);
 
     const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 150);
-    camera.position.set(0, 5.8, -5.0);
+camera.position.set(18.0, 5.8, -13.0);
 
     const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 900;
     const canvas = document.getElementById('canvas3d');
@@ -2400,18 +2400,14 @@
     miniDiorama.add(miniWall);
 
     // ==========================================
-// SOLID DIVIDER WALL BETWEEN STUDIO & CINEMA
-// ==========================================
-const dividerWall = new THREE.Mesh(
-  new THREE.BoxGeometry(0.5, 8.0, 16.0),
-  new THREE.MeshStandardMaterial({ 
-    color: 0x0b0416, 
-    roughness: 0.9,
-    side: THREE.DoubleSide // Renders the material on both sides
-  })
-);
-dividerWall.position.set(9.5, 4.0, -9.0);
-scene.add(dividerWall);
+    // SOLID DIVIDER WALL BETWEEN STUDIO & CINEMA
+    // ==========================================
+    const dividerWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 5.0, 16.0),
+      new THREE.MeshStandardMaterial({ color: 0x0b0416, roughness: 0.9 })
+    );
+    dividerWall.position.set(9.5, 2.65, -9.0);
+    scene.add(dividerWall);
 
     // ==========================================
     // ROOM NEXT DOOR (ANNEX CINEMA WITH PERSISTENT 3D CSS3D YOUTUBE SCREEN)
@@ -3336,7 +3332,7 @@ scene.add(dividerWall);
     });
 
     const moveState = { forward: false, backward: false, turnLeft: false, turnRight: false };
-    const plushiePosition = new THREE.Vector3(-1.6, 0.44, -1.2);
+    const plushiePosition = new THREE.Vector3(18.0, 0.44, -9.0);
     const plushieRotation = { yaw: 0 };
 
     const annexCenter = new THREE.Vector3(18.0, 0.44, -9.0);
