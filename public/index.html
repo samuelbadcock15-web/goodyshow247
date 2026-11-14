@@ -614,6 +614,10 @@
     }
 
     function speakGoodyLocalOnly(text) {
+      if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        return;
+      }
       if (!('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(text);
@@ -640,7 +644,8 @@
 
       setTimeout(() => {
         if (!isLocalHost || studioPower) return;
-        speakGoody("Welcome to The Goody Tonight Show! Step up to Podium 1 with your plushie avatar to select your game mode: choose 1-Player Solo race, 1-Player versus Goody, or standard 2-Player mode!", () => {
+        // Updated speech so he doesn't read out locked modes:
+        speakGoody("Welcome to The Goody Tonight Show! Step up to Podium 1 with your plushie avatar to start 2-Player mode!", () => {
           if (gameState === "MODE_PROMPT") {
             connectedDataConns.forEach(c => {
               if (c.open) c.send({ type: "OFFER_CONTESTANT_CHOICE" });
