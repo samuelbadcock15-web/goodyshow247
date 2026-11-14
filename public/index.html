@@ -11,201 +11,133 @@
   <title>The Goody Tonight Show - Live Studio Host</title>
 
   <style>
-
-    * {
-
-      -webkit-user-select: none;
-
-      user-select: none;
-
-      -webkit-touch-callout: none;
-
-      -webkit-tap-highlight-color: transparent;
-
-    }
-
-    body, html {
-
-      margin: 0; padding: 0; width: 100%; height: 100%;
-
-      overflow: hidden; background-color: #05020a;
-
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-
-      touch-action: none;
-
-    }
-
-    #canvas3d { width: 100%; height: 100%; display: block; cursor: pointer; position: absolute; top: 0; left: 0; z-index: 1; }
-
-    #css3d-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: hidden; }
-
-    #css3d-container iframe { pointer-events: auto; }
-
-
-
-    #hud {
-
-      position: absolute; top: 15px; left: 15px; background: rgba(22, 9, 44, 0.9);
-
-      border: 2px solid #ff79b0; border-radius: 12px; padding: 12px 18px; color: #fff;
-
-      font-family: monospace; font-size: 0.85rem; pointer-events: none; z-index: 20;
-
-      box-shadow: 0 0 20px rgba(255, 121, 176, 0.25);
-
-    }
-
-    #net-role-pill { margin-top: 4px; font-weight: bold; color: #00f0ff; font-size: 0.85rem; }
-
-    #room-code-pill { margin-top: 5px; font-weight: bold; color: #39ff14; font-size: 0.95rem; }
-
-    #countdown-pill { margin-top: 6px; font-weight: bold; color: #ffda66; font-size: 0.95rem; }
-
-    #match-clock-hud { margin-top: 4px; font-weight: bold; color: #00f0ff; font-size: 0.95rem; }
-
-    #audience-pill { margin-top: 4px; font-weight: bold; color: #39ff14; }
-
-
-
-    #mode-banner {
-
-      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-
-      background: rgba(22, 9, 44, 0.92); border: 2px solid #00f0ff; border-radius: 10px;
-
-      padding: 10px 20px; color: #ffda66; font-family: monospace; font-size: 0.9rem;
-
-      z-index: 25; text-align: center; box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
-
-      pointer-events: none;
-
-    }
-
-
-
-    #mobile-crosshair {
-
-      display: none; position: fixed; top: 50%; left: 50%;
-
-      width: 26px; height: 26px; transform: translate(-50%, -50%);
-
-      pointer-events: none; z-index: 30;
-
-    }
-
-    #mobile-crosshair::before, #mobile-crosshair::after {
-
-      content: ""; position: absolute; background: #00f0ff; box-shadow: 0 0 6px #39ff14;
-
-    }
-
-    #mobile-crosshair::before { top: 12px; left: 0; width: 26px; height: 2px; }
-
-    #mobile-crosshair::after { left: 12px; top: 0; width: 2px; height: 26px; }
-
-
-
-    #mobile-controls {
-
-      display: none; position: fixed; bottom: 95px; left: 65px; right: 65px;
-
-      justify-content: space-between; align-items: flex-end; pointer-events: none; z-index: 35;
-
-    }
-
-    .dpad-vertical {
-
-      display: grid; grid-template-columns: 136px; grid-template-rows: repeat(2, 136px);
-
-      gap: 14px; pointer-events: auto;
-
-    }
-
-    .dpad-horizontal {
-
-      display: grid; grid-template-columns: repeat(2, 136px); grid-template-rows: 136px;
-
-      gap: 14px; pointer-events: auto;
-
-    }
-
-    .m-btn {
-
-      background: rgba(22, 9, 44, 0.88); border: 3px solid #00f0ff; border-radius: 22px;
-
-      color: #fff; font-family: monospace; font-weight: bold; font-size: 3rem;
-
-      display: flex; align-items: center; justify-content: center;
-
-      user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none;
-
-    }
-
-    .m-btn:active, .m-btn.is-pressed { background: #00f0ff; color: #05020a; }
-
-
-
-    @media (hover: none) and (pointer: coarse) {
-
-      #mobile-crosshair { display: block; }
-
-      #mobile-controls { display: flex; }
-
-      #mode-banner { display: none; }
-
-    }
-
-  </style>
+  * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body, html {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background-color: #05020a;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    touch-action: none;
+  }
+  #canvas3d { width: 100%; height: 100%; display: block; cursor: pointer; position: absolute; top: 0; left: 0; z-index: 1; }
+  #css3d-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: hidden; }
+  #css3d-container iframe { pointer-events: auto; }
+
+  /* Collapsible HUD */
+  #hud {
+    position: absolute; top: 15px; left: 15px; background: rgba(22, 9, 44, 0.92);
+    border: 2px solid #ff79b0; border-radius: 12px; padding: 10px 14px; color: #fff;
+    font-family: monospace; font-size: 0.8rem; z-index: 20;
+    box-shadow: 0 0 20px rgba(255, 121, 176, 0.25);
+    max-height: 320px; transition: max-height 0.3s ease, padding 0.3s ease;
+    overflow: hidden; pointer-events: auto;
+  }
+  #hud.minimized {
+    max-height: 36px;
+    padding: 6px 12px;
+  }
+  #hud.minimized .hud-sub,
+  #hud.minimized #net-role-pill,
+  #hud.minimized #room-code-pill,
+  #hud.minimized #countdown-pill,
+  #hud.minimized #match-clock-hud,
+  #hud.minimized #audience-pill {
+    display: none;
+  }
+  #hud-header {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  }
+  #hud-toggle {
+    background: rgba(0, 240, 255, 0.2); border: 1px solid #00f0ff;
+    color: #ffda66; font-family: monospace; font-size: 0.7rem;
+    padding: 2px 6px; border-radius: 6px; cursor: pointer; pointer-events: auto;
+  }
+  #net-role-pill { margin-top: 4px; font-weight: bold; color: #00f0ff; font-size: 0.8rem; }
+  #room-code-pill { margin-top: 4px; font-weight: bold; color: #39ff14; font-size: 0.85rem; }
+  #countdown-pill { margin-top: 4px; font-weight: bold; color: #ffda66; font-size: 0.85rem; }
+  #match-clock-hud { margin-top: 4px; font-weight: bold; color: #00f0ff; font-size: 0.85rem; }
+  #audience-pill { margin-top: 4px; font-weight: bold; color: #39ff14; font-size: 0.8rem; }
+
+  #mode-banner {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(22, 9, 44, 0.92); border: 2px solid #00f0ff; border-radius: 10px;
+    padding: 10px 20px; color: #ffda66; font-family: monospace; font-size: 0.9rem;
+    z-index: 25; text-align: center; box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+    pointer-events: none;
+  }
+
+  /* Sleeker, smaller mobile crosshair */
+  #mobile-crosshair {
+    display: none; position: fixed; top: 50%; left: 50%;
+    width: 14px; height: 14px; transform: translate(-50%, -50%);
+    pointer-events: none; z-index: 30;
+  }
+  #mobile-crosshair::before, #mobile-crosshair::after {
+    content: ""; position: absolute; background: #00f0ff; box-shadow: 0 0 4px #39ff14;
+  }
+  #mobile-crosshair::before { top: 6px; left: 0; width: 14px; height: 1.5px; }
+  #mobile-crosshair::after { left: 6px; top: 0; width: 1.5px; height: 14px; }
+
+  #mobile-controls {
+    display: none; position: fixed; bottom: 95px; left: 65px; right: 65px;
+    justify-content: space-between; align-items: flex-end; pointer-events: none; z-index: 35;
+  }
+  .dpad-vertical {
+    display: grid; grid-template-columns: 136px; grid-template-rows: repeat(2, 136px);
+    gap: 14px; pointer-events: auto;
+  }
+  .dpad-horizontal {
+    display: grid; grid-template-columns: repeat(2, 136px); grid-template-rows: 136px;
+    gap: 14px; pointer-events: auto;
+  }
+  .m-btn {
+    background: rgba(22, 9, 44, 0.88); border: 3px solid #00f0ff; border-radius: 22px;
+    color: #fff; font-family: monospace; font-weight: bold; font-size: 3rem;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none;
+  }
+  .m-btn:active, .m-btn.is-pressed { background: #00f0ff; color: #05020a; }
+
+  @media (hover: none) and (pointer: coarse) {
+    #mobile-crosshair { display: block; }
+    #mobile-controls { display: flex; }
+    #mode-banner { display: none; }
+  }
+</style>
 
 </head>
 
 <body>
 
   <div id="hud">
-
-    <div class="hud-title" id="mode-title" style="color: #ffda66;">STUDIO FLOOR WORKSHOP</div>
-
-    <div class="hud-sub" id="mode-sub">Third-Person Follow Mode: Active • Tap Studio Screen to Stop Dice</div>
-
+    <div id="hud-header">
+      <div class="hud-title" id="mode-title" style="color: #ffda66; font-size: 0.8rem;">STUDIO FLOOR WORKSHOP</div>
+      <button id="hud-toggle" onclick="toggleHud()">expand 🔍</button>
+    </div>
+    <div class="hud-sub" id="mode-sub" style="font-size: 0.75rem; margin-top: 4px;">Third-Person Follow Mode: Active • Tap Studio Screen to Stop Dice</div>
     <div id="net-role-pill">NET: <span id="net-role-val" style="color:#ffda66;">CONNECTING TO RENDER...</span></div>
-
     <div id="room-code-pill">CODE: <span id="hud-code-val">----</span></div>
-
     <div id="countdown-pill">STATUS: <span id="timer-val" style="color:#ffda66;">SELECT GAME MODE (STEP ON PODIUM 1)</span></div>
-
     <div id="match-clock-hud">SHOW CLOCK: <span id="game-clock-val" style="color:#ffda66;">20:00</span></div>
-
     <div id="audience-pill">AUDIENCE WATCHING: <span id="audience-count" style="color:#39ff14;">1</span></div>
-
   </div>
-
-
 
   <div id="mobile-crosshair"></div>
 
-
-
   <div id="mobile-controls">
-
     <div class="dpad-vertical">
-
       <div class="m-btn" id="btn-m-fwd" role="button" aria-label="Forward">▲</div>
-
       <div class="m-btn" id="btn-m-back" role="button" aria-label="Backward">▼</div>
-
     </div>
-
     <div class="dpad-horizontal">
-
       <div class="m-btn" id="btn-m-left" role="button" aria-label="Turn Left">◀</div>
-
       <div class="m-btn" id="btn-m-right" role="button" aria-label="Turn Right">▶</div>
-
     </div>
-
   </div>
-
 
 
   <div id="mode-banner">
@@ -223,231 +155,139 @@
 
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS3DRenderer.js"></script>
-
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-
   <script src="https://goodyshow247.onrender.com/socket.io/socket.io.js"></script>
 
-
-
   <script>
+    function toggleHud() {
+      const hud = document.getElementById('hud');
+      const btn = document.getElementById('hud-toggle');
+      hud.classList.toggle('minimized');
+      if (hud.classList.contains('minimized')) {
+        btn.textContent = 'expand 🔍';
+      } else {
+        btn.textContent = 'minimize ➖';
+      }
+    }
 
     let isHostAuthorized = true;
-
     let isLocalHost = false;
-
     let selfSocketId = null;
-
     let socket = null;
-
     const remotePlushies = new Map();
-
     let lastEmitMoveTime = 0;
-
     let lastPodiumClaimed = 0;
-
     let podiumCooldownUntil = 0;
-
     let lockedP1SocketId = null;
-
     let lockedP2SocketId = null;
-
     let p2InviteAttempts = 0;
 
-
-
     function getPodiumCooldownRemaining() {
-
       return Math.max(0, Math.ceil((podiumCooldownUntil - Date.now()) / 1000));
-
     }
-
-
 
     const MAX_GAMES_PER_SESSION = 2;
-
     let sessionGamesPlayed = parseInt(localStorage.getItem('goody_session_games_played') || '0', 10);
 
-
-
     function hasReachedSessionGameLimit() {
-
       return sessionGamesPlayed >= MAX_GAMES_PER_SESSION;
-
     }
-
-
 
     function recordSessionGameStarted() {
-
       if (!isLocalOnPodium1 && !isLocalOnPodium2) return;
-
       sessionGamesPlayed++;
-
       localStorage.setItem('goody_session_games_played', String(sessionGamesPlayed));
-
     }
-
-
 
     function unlockHostEnvironment() {
-
       isHostAuthorized = true;
-
       initAudio();
-
       initStudioWebRTC();
-
       initSocketMultiplayer();
-
     }
 
-
-
     window.addEventListener('DOMContentLoaded', () => {
+      // Automatically minimize HUD on mobile viewports so the film and studio view remain unblocked
+      if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 900) {
+        const hud = document.getElementById('hud');
+        if (hud) {
+          hud.classList.add('minimized');
+          const toggleBtn = document.getElementById('hud-toggle');
+          if (toggleBtn) toggleBtn.textContent = 'expand 🔍';
+        }
+      }
 
       unlockHostEnvironment();
-
     });
 
-
-
     let studioRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
-
     document.getElementById('hud-code-val').textContent = studioRoomCode;
 
-
-
     let currentMode = 'BEDROOM';
-
     let studioPower = false;
-
     let isGoodySpeaking = false;
 
-
-
     let showPlayer1 = false;
-
     let showPlayer2 = false;
 
-
-
     const videoPlayer1 = document.createElement('video');
-
     videoPlayer1.autoplay = true; videoPlayer1.playsInline = true; videoPlayer1.muted = false;
-
     const videoPlayer2 = document.createElement('video');
-
     videoPlayer2.autoplay = true; videoPlayer2.playsInline = true; videoPlayer2.muted = false;
 
-
-
     let hasLivePlayer1Stream = false;
-
     let hasLivePlayer2Stream = false;
 
-
-
     let rawPlayer1Stream = null;
-
     let rawPlayer2Stream = null;
 
-
-
     let gameState = "MODE_PROMPT";
-
     let isSoloMode = false;
-
     let isVsGoodyMode = false;
-
     let goodyPlayerSlot = null;
-
     let soloPlayerId = null;
 
-
-
     let diceCountdown = 10;
-
     let diceCountdownInterval = null;
-
     let isDiceTimerActive = false;
-
     let p2JoinCountdown = 10;
-
     let p2JoinInterval = null;
-
     let isP2JoinTimerActive = false;
-
     let p1RollVal = null;
-
     let p2RollVal = null;
-
     let isDiceRollingP1 = false;
-
     let isDiceRollingP2 = false;
 
-
-
     let isPawnMoving = false;
-
     let hasPlayerRolledThisTurn = false;
 
-
-
     let matchTimerSeconds = 20 * 60;
-
     let matchTimerInterval = null;
-
     let isTimeExpired = false;
-
     let gameClockValEl = document.getElementById('game-clock-val');
 
-
-
     let activePlayer = "goody-contestant-1";
-
     let activeQuestion = null;
-
     let activeRecap = null;
-
     let isTieBreakerActive = false;
-
     let tieBreakerAnswered = false;
 
-
-
     let questionTimer = 0;
-
     let isQuestionTimerActive = false;
-
     let questionInterval = null;
-
     let stageSelectedOption = null;
-
     let stageOptionStatus = null;
 
-
-
     let audienceCount = 1;
-
     const audienceCountEl = document.getElementById('audience-count');
-
     const countdownPill = document.getElementById('countdown-pill');
-
     const timerValEl = document.getElementById('timer-val');
-
     const netRoleValEl = document.getElementById('net-role-val');
 
-
-
     const contestantRotations = {
-
       "goody-contestant-1": { yaw: 0, pitch: -0.15 },
-
       "goody-contestant-2": { yaw: 0, pitch: -0.15 }
-
     };
 
 
