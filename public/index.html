@@ -106,10 +106,11 @@
   </div>
 
   <canvas id="canvas3d"></canvas>
-<div id="cinema-overlay" style="display: none; position: fixed; top: 15%; left: 25%; width: 50%; height: 50%; z-index: 100; background: #000; border: 4px solid #00f0ff; border-radius: 12px; box-shadow: 0 0 30px rgba(0,240,255,0.5); overflow: hidden;">
-  <iframe id="cinema-iframe" width="100%" height="100%" src="" title="Brothers Film" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-  <div style="position: absolute; top: 5px; right: 10px; color: #fff; font-family: monospace; font-size: 12px; pointer-events: none;">CINEMA SCREEN • ACTIVE</div>
-</div>
+  <div id="cinema-overlay" style="display: none; position: fixed; top: 15%; left: 25%; width: 50%; height: 50%; z-index: 100; background: #000; border: 4px solid #00f0ff; border-radius: 12px; box-shadow: 0 0 30px rgba(0,240,255,0.5); overflow: hidden;">
+    <iframe id="cinema-iframe" width="100%" height="100%" src="" title="Brothers Film" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+    <div style="position: absolute; top: 5px; right: 10px; color: #fff; font-family: monospace; font-size: 12px; pointer-events: none;">CINEMA SCREEN • ACTIVE</div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="https://goodyshow247.onrender.com/socket.io/socket.io.js"></script>
@@ -619,7 +620,7 @@
     function speakGoodyLocalOnly(text) {
       if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-        return; // Mute local Goody voice in cinema
+        return;
       }
       if (!('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
@@ -647,7 +648,6 @@
 
       setTimeout(() => {
         if (!isLocalHost || studioPower) return;
-        // Updated speech so he doesn't read out locked modes:
         speakGoody("Welcome to The Goody Tonight Show! Step up to Podium 1 with your plushie avatar to start 2-Player mode!", () => {
           if (gameState === "MODE_PROMPT") {
             connectedDataConns.forEach(c => {
@@ -1609,8 +1609,8 @@
       if (videoPlayer2.srcObject) videoPlayer2.play();
     }
     function playTone(freq, type, duration, gainVal = 0.05) {
-  if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) return; // Mute SFX in cinema
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) return;
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       try {
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
@@ -1623,14 +1623,14 @@
     }
 
     function speakGoody(text, onComplete) {
-  if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    if (typeof onComplete === 'function') onComplete();
-    return; // Mute Goody voice in cinema
-  }
-  if (isLocalHost && socket && socket.connected) {
-    socket.emit('host_speak', { text });
-  }
+      if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        if (typeof onComplete === 'function') onComplete();
+        return;
+      }
+      if (isLocalHost && socket && socket.connected) {
+        socket.emit('host_speak', { text });
+      }
       
       if (!('speechSynthesis' in window)) {
         if (onComplete) onComplete();
@@ -2394,7 +2394,7 @@
     // ROOM NEXT DOOR (ANNEX STUDIO WITH ONE GIANT SCREEN)
     // ==========================================
     const annexRoomGroup = new THREE.Group();
-annexRoomGroup.position.set(18.0, 3.95, -9);
+    annexRoomGroup.position.set(18.0, 3.95, -9);
 
     const annexFloor = new THREE.Mesh(
       new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48),
@@ -2433,7 +2433,6 @@ annexRoomGroup.position.set(18.0, 3.95, -9);
         giantCtx.font = 'bold 24px monospace';
         giantCtx.fillText("🔴 LIVE BROADCAST FEED • ULTRA MEGA DISPLAY", 512, 130);
 
-        // Dynamic audio bars on the really large screen
         const barCount = 28;
         const barWidth = 26;
         const spacing = 8;
@@ -3479,7 +3478,6 @@ annexRoomGroup.position.set(18.0, 3.95, -9);
       for (let i = 0; i < count; i++) {
         const theta = -Math.PI * 0.65 + (i / (count - 1)) * (Math.PI * 1.30);
 
-        // This line punches a clean gap right in front of the main studio screen:
         if (theta > -0.55 && theta < 0.55) continue;
 
         const col = plushColors[(i + rowIdx * 3) % plushColors.length];
@@ -3780,30 +3778,25 @@ annexRoomGroup.position.set(18.0, 3.95, -9);
       const time = performance.now();
       const delta = Math.min((time - prevTime) / 1000, 0.1);
 
-      // --- CINEMA & STUDIO ZONE AUDIO/SCREEN SWITCHER (RUNS 60FPS) ---
       const isinCinemaAnnex = (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0);
       const cinemaOverlay = document.getElementById('cinema-overlay');
       const cinemaIframe = document.getElementById('cinema-iframe');
 
       if (isinCinemaAnnex) {
-        // 1. Instantly silence game show speech/audio when in cinema
         if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
           window.speechSynthesis.cancel();
         }
 
-        // 2. Auto-turn on Cinema Screen & load YouTube film (Brothers)
         if (cinemaOverlay && cinemaOverlay.style.display !== 'block') {
           cinemaOverlay.style.display = 'block';
           cinemaIframe.src = "https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1";
         }
       } else {
-        // Back in Game Show Studio: Hide cinema overlay & stop video/audio
         if (cinemaOverlay && cinemaOverlay.style.display !== 'none') {
           cinemaOverlay.style.display = 'none';
           cinemaIframe.src = ""; 
         }
       }
-      // -------------------------------------------------------------
 
       if (!window._lastScreenTexTime || time - window._lastScreenTexTime > 80) {
         window._lastScreenTexTime = time;
