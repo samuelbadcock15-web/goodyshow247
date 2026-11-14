@@ -2434,11 +2434,11 @@
     annexWall.position.y = 2.65;
     annexRoomGroup.add(annexWall);
 
-    // Persistent 3D CSS3D YouTube Screen inside Annex Room with enablejsapi=1[cite: 1]
     const ytContainer = document.createElement('div');
-    ytContainer.style.width = '800px';
-    ytContainer.style.height = '450px';
-    ytContainer.style.background = '#000';
+ytContainer.id = "annex-youtube-screen"; // <--- ADD THIS LINE HERE
+ytContainer.style.width = '800px';
+ytContainer.style.height = '450px';
+ytContainer.style.background = '#000';
     ytContainer.style.border = '6px solid #00f0ff';
     ytContainer.style.borderRadius = '16px';
     ytContainer.style.boxShadow = '0 0 40px rgba(0,240,255,0.6)';
