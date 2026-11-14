@@ -2403,10 +2403,14 @@
     // SOLID DIVIDER WALL BETWEEN STUDIO & CINEMA
     // ==========================================
     const dividerWall = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 12.0, 16.0), // Increased height to 12.0
-      new THREE.MeshStandardMaterial({ color: 0x0b0416, roughness: 0.9 })
+      new THREE.BoxGeometry(0.5, 12.0, 16.0),
+      new THREE.MeshStandardMaterial({ 
+        color: 0x0b0416, 
+        roughness: 0.9,
+        side: THREE.DoubleSide // <-- Add this line here
+      })
     );
-    dividerWall.position.set(9.5, 5.0, -9.0); // Adjusted center Y position for the taller wall
+    dividerWall.position.set(9.5, 5.0, -9.0);
     scene.add(dividerWall);
 
     // ==========================================
