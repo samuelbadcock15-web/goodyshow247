@@ -4870,7 +4870,25 @@ bigScreenMesh.position.set(0, 10.5, -13.0);
 cinemaHubGroup.add(bigScreenMesh);
 
 const miniDiorama = new THREE.Group(); miniDiorama.position.set(0, 3.95, -9);
+// --- TRANSPORT TUBE (Drop-down from Studio to Cinema Seating) ---
+const tubeGroup = new THREE.Group();
+tubeGroup.position.set(0, 0.44, 4.0); // Positioned on the main studio floor
+scene.add(tubeGroup);
 
+const tubeGlass = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.7, 0.7, 3.0, 24, 1, true),
+  new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+);
+tubeGlass.position.y = 1.5;
+tubeGroup.add(tubeGlass);
+
+const tubeRing = new THREE.Mesh(
+  new THREE.TorusGeometry(0.72, 0.04, 16, 32),
+  new THREE.MeshBasicMaterial({ color: 0x39ff14 })
+);
+tubeRing.rotation.x = Math.PI / 2;
+tubeRing.position.y = 0.1;
+tubeGroup.add(tubeRing);
 const feltCarpet = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48), new THREE.MeshStandardMaterial({ color: 0x271147 }));
 
 feltCarpet.position.y = 0.44;
@@ -7606,28 +7624,38 @@ const isPlayerTurnRoll = gameState === "IN_PLAY" && !hasPlayerRolledThisTurn && 
 
 
     plushiePosition.x = Math.max(-6.5, Math.min(6.5, plushiePosition.x));
-
     plushiePosition.z = Math.max(-6.5, Math.min(6.5, plushiePosition.z));
 
-
-
     if (lockedP1SocketId && lockedP1SocketId !== selfSocketId) {
-
       const dx1 = plushiePosition.x - p1Pos.x;
-
       const dz1 = plushiePosition.z - p1Pos.z;
-
       const d1 = Math.hypot(dx1, dz1);
-
       if (d1 < 0.78 && d1 > 0.0001) {
-
         plushiePosition.x = p1Pos.x + (dx1 / d1) * 0.78;
-
         plushiePosition.z = p1Pos.z + (dz1 / d1) * 0.78;
-
       }
-
     }
+    if (lockedP2SocketId && lockedP2SocketId !== selfSocketId) {
+      const dx2 = plushiePosition.x - p2Pos.x;
+      const dz2 = plushiePosition.z - p2Pos.z;
+      const d2 = Math.hypot(dx2, dz2);
+      if (d2 < 0.78 && d2 > 0.0001) {
+        plushiePosition.x = p2Pos.x + (dx2 / d2) * 0.78;
+        plushiePosition.z = p2Pos.z + (dz2 / d2) * 0.78;
+      }
+    }
+
+    // --- TRANSPORT TUBE DROP TRIGGER ---
+    const tubeCenter = new THREE.Vector3(0, 0.44, 4.0);
+    if (plushiePosition.distanceTo(tubeCenter) < 0.6) {
+      plushiePosition.y = 2.2; // Drops you down to the upper cinema seating tier level
+      plushiePosition.z = 9.0; // Moves you forward into the theater bowl
+      playTone(520, 'sine', 0.2, 0.1); // Fun drop sound effect!
+    }
+  }
+
+  const dioramaWorldPos = new THREE.Vector3(0, 3.95, -9);
+  const plushieWorldPos = plushiePosition.clone().add(dioramaWorldPos);
 
     if (lockedP2SocketId && lockedP2SocketId !== selfSocketId) {
 
@@ -7646,8 +7674,6 @@ const isPlayerTurnRoll = gameState === "IN_PLAY" && !hasPlayerRolledThisTurn && 
       }
 
     }
-
-  }
 
 
 
