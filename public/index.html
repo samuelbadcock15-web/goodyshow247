@@ -2400,13 +2400,17 @@
     miniDiorama.add(miniWall);
 
     // ==========================================
-    // SOLID DIVIDER WALL BETWEEN STUDIO & CINEMA
-    // ==========================================
-    const dividerWall = new THREE.Mesh(
-  new THREE.BoxGeometry(0.5, 10.0, 16.0), // Changed height from 5.0 to 8.0
-  new THREE.MeshStandardMaterial({ color: 0x0b0416, roughness: 0.9 })
+// SOLID DIVIDER WALL BETWEEN STUDIO & CINEMA
+// ==========================================
+const dividerWall = new THREE.Mesh(
+  new THREE.BoxGeometry(0.5, 8.0, 16.0),
+  new THREE.MeshStandardMaterial({ 
+    color: 0x0b0416, 
+    roughness: 0.9,
+    side: THREE.DoubleSide // Renders the material on both sides
+  })
 );
-dividerWall.position.set(9.5, 8.0, -9.0); // Adjusted Y position to 4.0 so it sits neatly from the floor up
+dividerWall.position.set(9.5, 4.0, -9.0);
 scene.add(dividerWall);
 
     // ==========================================
