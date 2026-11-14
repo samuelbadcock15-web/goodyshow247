@@ -2400,34 +2400,24 @@
     miniDiorama.add(miniWall);
 
     // ==========================================
-    // SOLID DIVIDER WALL BETWEEN STUDIO & CINEMA
-    // ==========================================
-    const dividerWall = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 5.0, 16.0),
-      new THREE.MeshStandardMaterial({ color: 0x0b0416, roughness: 0.9 })
-    );
-    dividerWall.position.set(9.5, 2.65, -9.0);
-    scene.add(dividerWall);
-
-    // ==========================================
     // ROOM NEXT DOOR (ANNEX CINEMA WITH PERSISTENT 3D CSS3D YOUTUBE SCREEN)
     // ==========================================
     const annexRoomGroup = new THREE.Group();
-    annexRoomGroup.position.set(35.0, 3.95, -9); //
+    annexRoomGroup.position.set(18.0, 3.95, -9);
 
     const annexFloor = new THREE.Mesh(
-      new THREE.CylinderGeometry(16.0, 16.0, 0.08, 48), // 
+      new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48),
       new THREE.MeshStandardMaterial({ color: 0x180b2e })
     );
     annexFloor.position.y = 0.44;
     annexRoomGroup.add(annexFloor);
 
     const annexWall = new THREE.Mesh(
-      new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI, Math.PI * 2), // <-- Change 7.0 here to match the floor radius
+      new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI, Math.PI * 2),
       new THREE.MeshStandardMaterial({ color: 0x0b0416, side: THREE.BackSide })
     );
     annexWall.position.y = 2.65;
-    annexRoomGroup.add(annexWall);;
+    annexRoomGroup.add(annexWall);
 
     // Persistent 3D CSS3D YouTube Screen inside Annex Room with enablejsapi=1[cite: 1]
     const ytContainer = document.createElement('div');
