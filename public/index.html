@@ -1615,9 +1615,7 @@
     }
 
     function speakGoody(text, onComplete) {
-  // Check if player is currently inside the cinema room annex
-  function speakGoody(text, onComplete) {
-      if (plushiePosition.x > 10.0) {
+      if (typeof plushiePosition !== 'undefined' && plushiePosition.x > 10.0) {
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
         if (onComplete) onComplete();
         return; // Mute Goody's voice when player is in the cinema room
@@ -1626,7 +1624,7 @@
       if (isLocalHost && socket && socket.connected) {
         socket.emit('host_speak', { text });
       }
-
+      
       if (!('speechSynthesis' in window)) {
         if (onComplete) onComplete();
         return;
