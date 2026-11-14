@@ -4818,7 +4818,56 @@ function updateStudioLighting(power) {
 
 }
 
+// --- GRAND CINEMA THEATER AUDITORIUM ---
+const cinemaHubGroup = new THREE.Group();
+cinemaHubGroup.position.set(0, -0.6, 14.0); // Placed in its own open room in front of the studio
+cinemaHubGroup.rotation.y = Math.PI; // Turned 180 degrees to face the stage
+scene.add(cinemaHubGroup);
 
+// Steep Gladiator-Style Tiered Seating Steps
+for (let r = 0; r < 8; r++) {
+  const tierRadius = 7.0 + (r * 1.6);
+  const tierStep = new THREE.Mesh(
+    new THREE.CylinderGeometry(tierRadius, tierRadius + 1.4, 0.55, 32, 1, true, -Math.PI * 0.78, Math.PI * 1.56),
+    new THREE.MeshStandardMaterial({ color: 0x1b0c30, roughness: 0.4, metalness: 0.3 })
+  );
+  // Stack each tier higher and further back
+  tierStep.position.set(0, 0.25 + (r * 0.75), r * 1.4);
+  cinemaHubGroup.add(tierStep);
+}
+
+// Giant IMAX Cinema Screen
+const bigCinemaCanvas = document.createElement('canvas');
+bigCinemaCanvas.width = 1024; bigCinemaCanvas.height = 512;
+const bigCtx = bigCinemaCanvas.getContext('2d');
+const bigScreenTex = new THREE.CanvasTexture(bigCinemaCanvas);
+
+function renderBigCinemaScreen() {
+  bigCtx.fillStyle = '#05020a';
+  bigCtx.fillRect(0, 0, 1024, 512);
+  bigCtx.strokeStyle = '#00f0ff';
+  bigCtx.lineWidth = 8;
+  bigCtx.strokeRect(12, 12, 1000, 488);
+
+  bigCtx.fillStyle = '#ffda66';
+  bigCtx.font = 'bold 42px monospace';
+  bigCtx.textAlign = 'center';
+  bigCtx.fillText("THE GOODY CINEMAS • GRAND AUDITORIUM", 512, 180);
+
+  bigCtx.fillStyle = '#39ff14';
+  bigCtx.font = 'bold 24px monospace';
+  bigCtx.fillText("WALK DOWN THE AISLE TO PODIUM 1 TO START SHOW", 512, 260);
+  bigScreenTex.needsUpdate = true;
+}
+renderBigCinemaScreen();
+
+const bigScreenMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(20, 10),
+  new THREE.MeshBasicMaterial({ map: bigScreenTex })
+);
+// Towering over the back wall of the cinema room
+bigScreenMesh.position.set(0, 10.5, -13.0);
+cinemaHubGroup.add(bigScreenMesh);
 
 const miniDiorama = new THREE.Group(); miniDiorama.position.set(0, 3.95, -9);
 
@@ -6596,7 +6645,7 @@ window.addEventListener('pointerup', (e) => {
 
 const moveState = { forward: false, backward: false, turnLeft: false, turnRight: false };
 
-const plushiePosition = new THREE.Vector3(-1.6, 0.44, -1.2);
+const plushiePosition = new THREE.Vector3(0, 3.5, 14.0);
 
 const plushieRotation = { yaw: 0 };
 
