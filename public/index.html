@@ -3901,7 +3901,7 @@ annexRoomGroup.position.set(18.0, 3.95, -9);
           entry.mesh.userData.nameTagMesh.quaternion.copy(camera.quaternion);
         }
       });
-    }
+
       const camTargetX = plushieWorldPos.x + Math.sin(plushieRotation.yaw) * 3.2;
       const camTargetZ = plushieWorldPos.z + Math.cos(plushieRotation.yaw) * 3.2;
       const camTargetY = plushieWorldPos.y + 1.6;
@@ -4069,6 +4069,7 @@ annexRoomGroup.position.set(18.0, 3.95, -9);
       prevTime = time;
 
       renderer.render(scene, camera);
+    }
     }
     animate();
   </script>
