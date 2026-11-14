@@ -3328,7 +3328,7 @@
     });
 
     const moveState = { forward: false, backward: false, turnLeft: false, turnRight: false };
-    const plushiePosition = new THREE.Vector3(0, 0.44, -1.2);
+    const plushiePosition = new THREE.Vector3(0, 0.44, 4.0);
     const plushieRotation = { yaw: 0 };
 
     function bindMobileHoldButton(btnId, stateKey) {
@@ -3845,14 +3845,17 @@
       const distP1 = plushiePosition.distanceTo(p1Pos);
       const distP2 = plushiePosition.distanceTo(p2Pos);
 
-      if (distP1 < 0.65 || distP2 < 0.65) {
-        plushiePosition.y = 0.58;
-      } else {
-        // Keep normal floor height unless dropped or on podium
-        if (plushiePosition.z < 6.0) {
-          plushiePosition.y = 0.44;
-        }
-      }
+      const distP1 = plushiePosition.distanceTo(p1Pos);
+  const distP2 = plushiePosition.distanceTo(p2Pos);
+
+  if (distP1 < 0.65 || distP2 < 0.65) {
+    plushiePosition.y = 0.58;
+  } else {
+    // Keep plushie firmly on the studio floor unless it has dropped into the theater
+    if (plushiePosition.y < 2.0) {
+      plushiePosition.y = 0.44;
+    }
+  }
 
       localPlushie.position.copy(plushiePosition);
       localPlushie.rotation.y = plushieRotation.yaw + Math.PI;
