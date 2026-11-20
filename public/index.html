@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>The Goody Tonight Show - Live Studio Host</title>
   <style>
-    * {
+- {
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
@@ -155,19 +155,6 @@
 
     function getPodiumCooldownRemaining() {
       return Math.max(0, Math.ceil((podiumCooldownUntil - Date.now()) / 1000));
-    }
-
-    const MAX_GAMES_PER_SESSION = 2;
-    let sessionGamesPlayed = parseInt(localStorage.getItem('goody_session_games_played') || '0', 10);
-
-    function hasReachedSessionGameLimit() {
-      return sessionGamesPlayed >= MAX_GAMES_PER_SESSION;
-    }
-
-    function recordSessionGameStarted() {
-      if (!isLocalOnPodium1 && !isLocalOnPodium2) return;
-      sessionGamesPlayed++;
-      localStorage.setItem('goody_session_games_played', String(sessionGamesPlayed));
     }
 
     function unlockHostEnvironment() {
@@ -711,7 +698,6 @@
       }
 
       if (modeType === "SOLO") {
-        recordSessionGameStarted();
         isSoloMode = true;
         isVsGoodyMode = false;
         soloPlayerId = "goody-contestant-1";
@@ -1703,7 +1689,6 @@
     }
 
     function beginTenSecondDiceDuel() {
-      recordSessionGameStarted();
       gameState = "OPENING_DUEL";
       updateHudStatusBanner();
       renderStageQuestionBoard();
@@ -2861,18 +2846,9 @@
         qBoardCtx.fillRect(36, 66, 440, 2);
 
         const cooldownSecs = getPodiumCooldownRemaining();
-        const limitReached = !window.isDropoutRecoveryPrompt && hasReachedSessionGameLimit();
-        const canInteractPrompt = !limitReached && (cooldownSecs === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
+        const canInteractPrompt = (cooldownSecs === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
 
-        if (limitReached && (isLocalOnPodium1 || isLocalOnPodium2)) {
-          qBoardCtx.fillStyle = '#ff7675';
-          qBoardCtx.font = 'bold 20px sans-serif';
-          qBoardCtx.fillText("SESSION LIMIT REACHED (2/2 GAMES)", 256, 155);
-
-          qBoardCtx.fillStyle = '#ffda66';
-          qBoardCtx.font = 'bold 16px monospace';
-          qBoardCtx.fillText("ENJOY WATCHING FROM THE AUDIENCE!", 256, 200);
-        } else if (cooldownSecs > 0 && (isLocalOnPodium1 || isLocalOnPodium2)) {
+        if (cooldownSecs > 0 && (isLocalOnPodium1 || isLocalOnPodium2)) {
           qBoardCtx.fillStyle = '#ff7675';
           qBoardCtx.font = 'bold 20px sans-serif';
           qBoardCtx.fillText("ANTI-TROLL PODIUM COOLDOWN ACTIVE", 256, 155);
@@ -3282,7 +3258,7 @@
         const canvasX = uv ? uv.x * 512 : 256;
         const canvasY = uv ? (1 - uv.y) * 384 : -1;
 
-        const canInteractPrompt = !hasReachedSessionGameLimit() && (getPodiumCooldownRemaining() === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
+        const canInteractPrompt = (getPodiumCooldownRemaining() === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
 
         if (gameState === "MODE_PROMPT" && canInteractPrompt && canvasY >= 0) {
           const allowSoloAndGoody = !!window.isDropoutRecoveryPrompt;
@@ -3459,7 +3435,7 @@
       if (e.code === 'KeyA' || e.code === 'ArrowLeft') moveState.turnLeft = true;
       if (e.code === 'KeyD' || e.code === 'ArrowRight') moveState.turnRight = true;
 
-      const canInteractPrompt = !hasReachedSessionGameLimit() && (getPodiumCooldownRemaining() === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
+      const canInteractPrompt = (getPodiumCooldownRemaining() === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
       if (gameState === "MODE_PROMPT" && canInteractPrompt) {
         const allowSoloAndGoody = !!window.isDropoutRecoveryPrompt;
         if (e.key === '1' && allowSoloAndGoody) chooseHostGameMode("SOLO");
@@ -3937,7 +3913,7 @@
       }
 
       if ((isLocalOnPodium1 !== prevPodium1) || (isLocalOnPodium2 !== prevPodium2)) {
-        if (!hasReachedSessionGameLimit() && getPodiumCooldownRemaining() === 0) {
+        if (getPodiumCooldownRemaining() === 0) {
           if (isLocalOnPodium1 && lastPodiumClaimed !== 1 && socket && socket.connected) {
             lastPodiumClaimed = 1;
             socket.emit('client_action', { type: 'CLAIM_PODIUM', slot: 1 });
