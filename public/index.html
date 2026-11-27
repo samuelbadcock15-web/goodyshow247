@@ -182,6 +182,12 @@
       return Math.max(0, Math.ceil((podiumCooldownUntil - Date.now()) / 1000));
     }
 
+    function triggerCinemaPlay() {
+      if (typeof ytIframe !== 'undefined' && ytIframe && ytIframe.contentWindow) {
+        ytIframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+      }
+    }
+
     function unlockHostEnvironment() {
       if (hasEnteredRoom) return;
       hasEnteredRoom = true;
@@ -683,7 +689,7 @@
       utter.rate = 0.95;
       utter.pitch = 1.25;
       utter.onstart = () => { isGoodySpeaking = true; };
-      utter.onboundary = (e) => {
+      utter.onboundary = () => {
         isGoodySpeaking = true;
         playTone(460 + Math.random() * 200, 'triangle', 0.05, 0.02);
       };
@@ -1941,12 +1947,6 @@
     ytIframe.allowFullscreen = true;
     ytContainer.appendChild(ytIframe);
 
-    function triggerCinemaPlay() {
-      if (ytIframe && ytIframe.contentWindow) {
-        ytIframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-      }
-    }
-
     const css3DObject = new THREE.CSS3DObject(ytContainer);
     css3DObject.position.set(18.0, 6.25, -13.6);
     css3DObject.scale.set(0.007, 0.007, 0.007);
@@ -3198,6 +3198,48 @@
       }
     }
     scene.add(miniDiorama);
+
+    const annexRoomGroup = new THREE.Group();
+    annexRoomGroup.position.set(18.0, 3.95, -9);
+
+    const annexFloor = new THREE.Mesh(
+      new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48),
+      new THREE.MeshStandardMaterial({ color: 0x180b2e })
+    );
+    annexFloor.position.y = 0.44;
+    annexRoomGroup.add(annexFloor);
+
+    const annexWall = new THREE.Mesh(
+      new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI, Math.PI * 2),
+      new THREE.MeshStandardMaterial({ color: 0x0b0416, side: THREE.BackSide })
+    );
+    annexWall.position.y = 2.65;
+    annexRoomGroup.add(annexWall);
+
+    const ytContainer = document.createElement('div');
+    ytContainer.style.width = '800px';
+    ytContainer.style.height = '450px';
+    ytContainer.style.background = '#000';
+    ytContainer.style.border = '6px solid #00f0ff';
+    ytContainer.style.borderRadius = '16px';
+    ytContainer.style.boxShadow = '0 0 40px rgba(0,240,255,0.6)';
+    ytContainer.style.overflow = 'hidden';
+
+    const ytIframe = document.createElement('iframe');
+    ytIframe.width = '100%';
+    ytIframe.height = '100%';
+    ytIframe.src = 'https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1&enablejsapi=1&mute=1&playsinline=1&loop=1&playlist=nlY3O4gtv0c,6qq5LTUa0PE,tBengLyBw84,nN8k5inw2Fs';
+    ytIframe.frameBorder = '0';
+    ytIframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+    ytIframe.allowFullscreen = true;
+    ytContainer.appendChild(ytIframe);
+
+    const css3DObject = new THREE.CSS3DObject(ytContainer);
+    css3DObject.position.set(18.0, 6.25, -13.6);
+    css3DObject.scale.set(0.007, 0.007, 0.007);
+    scene.add(css3DObject);
+
+    scene.add(annexRoomGroup);
 
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
