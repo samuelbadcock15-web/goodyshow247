@@ -45,6 +45,8 @@ function createInitialRoomState() {
     questionTimer: 0,
     isQuestionTimerActive: false,
     isTieBreakerActive: false,
+    isDropoutRecoveryPrompt: false,
+    p2InviteAttempts: 0,
     contestantNames: {
       "goody-contestant-1": "Player 1",
       "goody-contestant-2": "Player 2"
@@ -63,8 +65,8 @@ function createInitialRoomState() {
 let roomState = createInitialRoomState();
 
 const PLUSHIE_COLORS = [
-  0x00f0ff, 0xff7675, 0x55efc4, 0xffbe76, 0xa29bfe,
-  0xfd79a8, 0xf6e58d, 0x48dbfb, 0xff9ff3, 0x74b9ff
+  0x00f0ff, 0xff79b0, 0x39ff14, 0xffda66, 0xa29bfe,
+  0x55efc4, 0xfd79a8, 0x48dbfb, 0xff9ff3, 0x74b9ff
 ];
 
 function electNewHostIfNeeded() {
@@ -77,7 +79,6 @@ function electNewHostIfNeeded() {
   }
 
   if (!hostSocketId || !players[hostSocketId]) {
-    // Pick next available player (randomized among remaining players)
     const randomIndex = Math.floor(Math.random() * activeIds.length);
     hostSocketId = activeIds[randomIndex];
     players[hostSocketId].isHost = true;
@@ -103,16 +104,15 @@ io.on('connection', (socket) => {
 
   players[socket.id] = {
     id: socket.id,
-    x: -1.6 + (Math.random() * 1.6 - 0.8),
+    x: Math.random() * 2.4 - 1.2,
     y: 0.44,
-    z: -1.0 + (Math.random() * 1.2 - 0.6),
+    z: 2.2 + Math.random() * 1.2,
     yaw: 0,
     name: `Guest ${socket.id.slice(0, 4)}`,
     color: assignedColor,
     isHost: socket.id === hostSocketId
   };
 
-  // Send immediate initialization + live 24/7 room snapshot to the newly connected client
   socket.emit('init_session', {
     selfId: socket.id,
     isHost: socket.id === hostSocketId,
@@ -121,11 +121,9 @@ io.on('connection', (socket) => {
     roomState: roomState
   });
 
-  // Notify everyone else of the new plushie & updated audience count
   io.emit('update_players', players);
   io.emit('audience_count', { count: Object.keys(players).length });
 
-  // Real-time 3D plushie position & rotation sync
   socket.on('player_move', (data) => {
     if (players[socket.id]) {
       players[socket.id].x = data.x;
@@ -138,7 +136,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Active Showrunner (Host) pushes authoritative state updates to server & all viewers
   socket.on('sync_game_state', (newState) => {
     if (socket.id !== hostSocketId) return;
     roomState = {
@@ -156,33 +153,30 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('sync_game_state', roomState);
   });
 
-  // Active Showrunner broadcasts Goody AI speech text so all clients animate Goody's face & subtitles
   socket.on('host_speak', (payload) => {
     if (socket.id !== hostSocketId) return;
     socket.broadcast.emit('host_speak', payload);
   });
 
-  // Non-host players can interact with Podium 1, Studio Screen, Dice, and Trivia Answers
   socket.on('client_action', (actionData) => {
-    // Allow anyone to claim a podium slot when standing on it
     if (actionData.type === 'CLAIM_PODIUM') {
-      if (actionData.slot === 1) {
+      if (actionData.slot === 1 && !roomState.p1ControllerSocketId) {
         roomState.p1ControllerSocketId = socket.id;
         roomState.lockedP1SocketId = socket.id;
         if (players[socket.id]) {
           roomState.contestantNames["goody-contestant-1"] = players[socket.id].name;
         }
-      } else if (actionData.slot === 2) {
+        io.emit('sync_game_state', roomState);
+      } else if (actionData.slot === 2 && !roomState.p2ControllerSocketId) {
         roomState.p2ControllerSocketId = socket.id;
         roomState.lockedP2SocketId = socket.id;
         if (players[socket.id]) {
           roomState.contestantNames["goody-contestant-2"] = players[socket.id].name;
         }
+        io.emit('sync_game_state', roomState);
       }
-      io.emit('sync_game_state', roomState);
     }
 
-    // Forward gameplay input (MODE_SELECT, ROLL_DICE, ANSWER_QUESTION) to the active host
     if (hostSocketId && players[hostSocketId]) {
       io.to(hostSocketId).emit('remote_client_action', {
         fromSocketId: socket.id,
