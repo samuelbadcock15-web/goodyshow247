@@ -1196,6 +1196,48 @@
       }, 2500);
     }
 
+    const COUNTRY_QUESTIONS = {
+      "UK": [
+        { q: "In the UK, before the 2019 stake reduction, what was the maximum stake per spin on a Fixed-Odds-Betting-Terminal?", options: ["£2", "£50", "£100", "£500"], ans: "£100", recap: "In April 2019, the UK reduced the maximum FOBT stake per spin from £100 down to £2 to combat severe harms." },
+        { q: "In the UK, what is the name of the land-based self-exclusion scheme that covers Betting Shops (Bookies)?", options: ["Bingo Association", "SENSE", "Bacta", "Moses"], ans: "Moses", recap: "MOSES allows people to self-exclude across high street bookmakers in their chosen localities." },
+        { q: "In the UK, what is the name of the land-based self-exclusion scheme that covers Casinos?", options: ["Bacta", "SENSE", "Moses", "Bingo Association"], ans: "SENSE", recap: "SENSE allows players to enroll once to be excluded from all UK commercial casinos." }
+      ],
+      "Canada": [
+        { q: "In Ontario, what is the name of the land-based self-exclusion scheme that covers Casinos?", options: ["SENSE", "MyPlay Break", "Bacta", "BetGuard"], ans: "MyPlay Break", recap: "MyPlay Break is Ontario's official casino self-exclusion initiative managed by OLG." },
+        { q: "What is the name of Ontario's national online self-exclusion scheme?", options: ["BetGuard", "RUA", "GamStop", "Oasis"], ans: "BetGuard", recap: "BetGuard centralizes online exclusion across licensed iGaming Ontario operators." }
+      ],
+      "Brazil": [
+        { q: "What is the name of Brazil's national online self-exclusion scheme?", options: ["Spelpaus", "Plataforma Centralizada de Autoexclusão", "Rofus", "RGIAJ"], ans: "Plataforma Centralizada de Autoexclusão", recap: "Brazil uses the Plataforma Centralizada de Autoexclusão across its regulated betting system." }
+      ],
+      "United States": [
+        { q: "Which city in Nevada is world-famous for gambling?", options: ["Las Vegas", "Atlantic City", "Macau", "Monte Carlo"], ans: "Las Vegas", recap: "Las Vegas, Nevada is internationally renowned for its casino entertainment corridors." }
+      ],
+      "Italy": [
+        { q: "What is the name of Italy's national online self-exclusion scheme?", options: ["Spelpaus", "RUA", "GamStop", "Oasis"], ans: "RUA", recap: "RUA (Registro Unico degli Autoesclusi) covers all licensed online platforms in Italy." }
+      ],
+      "Belgium": [
+        { q: "What is the name of Belgium's national self-exclusion scheme covering both online and land-based gambling?", options: ["Rofus", "EPIS", "Oasis", "GamStop"], ans: "EPIS", recap: "EPIS (Excluded Persons Information System) covers all regulated gambling in Belgium." }
+      ],
+      "Germany": [
+        { q: "What is the name of Germany's national self-exclusion scheme covering both online and land-based gambling?", options: ["Spelpaus", "Oasis", "Rofus", "GamStop"], ans: "Oasis", recap: "OASIS is Germany's mandatory federal exclusion register across arcades, casinos, and web gaming." }
+      ],
+      "Denmark": [
+        { q: "What is the name of Denmark's national self-exclusion scheme covering both online and land-based gambling?", options: ["Rofus", "Oasis", "GamStop", "EPIS"], ans: "Rofus", recap: "ROFUS is managed by the Danish Gambling Authority to enforce cross-platform player protection." }
+      ],
+      "Australia": [
+        { q: "What is the name of Australia's national online self-exclusion scheme?", options: ["Oasis", "Rofus", "BetStop", "SafePlay"], ans: "BetStop", recap: "BetStop is Australia's National Self-Exclusion Register for licensed online and telephone wagering." }
+      ],
+      "Sweden": [
+        { q: "What is the name of Sweden's centralized national self-exclusion system?", options: ["Spelpaus", "ROFUS", "BetStop", "EPIS"], ans: "Spelpaus", recap: "Spelpaus allows individuals in Sweden to block themselves across all licensed gaming." }
+      ],
+      "Spain": [
+        { q: "What is the acronym for Spain's national register of gaming access prohibitions?", options: ["RGIAJ", "RUA", "EPIS", "OASIS"], ans: "RGIAJ", recap: "RGIAJ enforces exclusion across physical and online gaming in Spain." }
+      ],
+      "Netherlands": [
+        { q: "What is the name of the central register for the exclusion of gaming in the Netherlands?", options: ["Cruks", "GamStop", "ROFUS", "Spelpaus"], ans: "Cruks", recap: "Cruks (Centraal Register Uitsluiting Kansspelen) is mandatory across all Dutch gaming operators." }
+      ]
+    };
+
     let audioCtx = null;
     let goodyUtterance = null;
     function initAudio() {
@@ -1733,7 +1775,7 @@
         pushAuthoritativeState();
         const soloName = contestantNames[soloPlayerId];
         speakGoody(`The 20-minute timer has expired! Unfortunately, ${soloName} was unable to complete the board in time! Tonight's prize rolls over. Goodnight everyone!`);
-        broadcastGameOver("NOBODY", "SOLO_TIME_EXPIRED");
+        broadcastGameOver();
         return;
       }
 
@@ -1742,7 +1784,7 @@
         updateHudStatusBanner();
         pushAuthoritativeState();
         speakGoody("The 20-minute show timer has run out, and both contestants are still on the starting square! Nobody wins tonight. Goodnight everyone!");
-        broadcastGameOver("NOBODY", "ROLLOVER_START_SQUARE");
+        broadcastGameOver();
         return;
       }
 
@@ -1758,7 +1800,7 @@
       const loser = p1Index > p2Index ? contestantNames["goody-contestant-2"] : contestantNames["goody-contestant-1"];
 
       speakGoody(`The 20-minute timer is over! Well done to our winner ${winner}, and commiserations to ${loser}! Goodnight!`);
-      broadcastGameOver(winner, "TIME_EXPIRED_LEADER");
+      broadcastGameOver();
     }
 
     function triggerTieBreakerDuel() {
@@ -1810,12 +1852,11 @@
       updateHudStatusBanner();
       pushAuthoritativeState();
       const winner = isCorrect ? answeringName : opponentName;
-      const loser = isCorrect ? opponentName : answeringName;
 
       speakGoody(isCorrect
         ? `That is correct! Well done to our winner ${winner}! Goodnight!`
         : `That is incorrect! By default, well done to our winner ${winner}! Goodnight!`);
-      broadcastGameOver(winner, "TIE_BREAKER_DECISION");
+      broadcastGameOver();
     }
 
     function triggerFinishLineVictory(winnerName, loserName) {
@@ -1831,7 +1872,7 @@
       speakGoody(isSoloMode
         ? `Unbelievable! ${winnerName} has reached the final square and completed the solo challenge! Well done! Goodnight!`
         : `Unbelievable! ${winnerName} has reached the final square! Well done to our winner ${winnerName}, and commiserations to ${loserName}! Goodnight!`);
-      broadcastGameOver(winnerName, "REACHED_THE_END");
+      broadcastGameOver();
     }
 
     function broadcastGameOver() {
@@ -1841,6 +1882,23 @@
       window.isDropoutRecoveryPrompt = false;
       pushAuthoritativeState();
     }
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x040208);
+    scene.fog = new THREE.FogExp2(0x040208, 0.015);
+
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 150);
+    camera.position.set(18.0, 6.2, -5.0);
+
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 900;
+    const canvas = document.getElementById('canvas3d');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
+
+    const cssRenderer = new THREE.CSS3DRenderer();
+    cssRenderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('css3d-container').appendChild(cssRenderer.domElement);
 
     const ambientLight = new THREE.AmbientLight(0x181026, 0.85); scene.add(ambientLight);
     const ceilingLight = new THREE.PointLight(0xffecd2, 1.0, 50); ceilingLight.position.set(0, 13.5, 0); scene.add(ceilingLight);
@@ -3198,48 +3256,6 @@
       }
     }
     scene.add(miniDiorama);
-
-    const annexRoomGroup = new THREE.Group();
-    annexRoomGroup.position.set(18.0, 3.95, -9);
-
-    const annexFloor = new THREE.Mesh(
-      new THREE.CylinderGeometry(7.0, 7.0, 0.08, 48),
-      new THREE.MeshStandardMaterial({ color: 0x180b2e })
-    );
-    annexFloor.position.y = 0.44;
-    annexRoomGroup.add(annexFloor);
-
-    const annexWall = new THREE.Mesh(
-      new THREE.CylinderGeometry(7.0, 7.0, 4.5, 32, 1, true, -Math.PI, Math.PI * 2),
-      new THREE.MeshStandardMaterial({ color: 0x0b0416, side: THREE.BackSide })
-    );
-    annexWall.position.y = 2.65;
-    annexRoomGroup.add(annexWall);
-
-    const ytContainer = document.createElement('div');
-    ytContainer.style.width = '800px';
-    ytContainer.style.height = '450px';
-    ytContainer.style.background = '#000';
-    ytContainer.style.border = '6px solid #00f0ff';
-    ytContainer.style.borderRadius = '16px';
-    ytContainer.style.boxShadow = '0 0 40px rgba(0,240,255,0.6)';
-    ytContainer.style.overflow = 'hidden';
-
-    const ytIframe = document.createElement('iframe');
-    ytIframe.width = '100%';
-    ytIframe.height = '100%';
-    ytIframe.src = 'https://www.youtube.com/embed/nN8k5inw2Fs?autoplay=1&enablejsapi=1&mute=1&playsinline=1&loop=1&playlist=nlY3O4gtv0c,6qq5LTUa0PE,tBengLyBw84,nN8k5inw2Fs';
-    ytIframe.frameBorder = '0';
-    ytIframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-    ytIframe.allowFullscreen = true;
-    ytContainer.appendChild(ytIframe);
-
-    const css3DObject = new THREE.CSS3DObject(ytContainer);
-    css3DObject.position.set(18.0, 6.25, -13.6);
-    css3DObject.scale.set(0.007, 0.007, 0.007);
-    scene.add(css3DObject);
-
-    scene.add(annexRoomGroup);
 
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
