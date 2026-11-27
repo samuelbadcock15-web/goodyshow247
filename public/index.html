@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>The Goody Tonight Show - Live Studio Host</title>
   <style>
-- {
+    * {
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
@@ -275,7 +275,7 @@
       if (gameState === "MODE_PROMPT") {
         countdownPill.innerHTML = `STATUS: <span style="color:#ffda66;">SELECT GAME MODE (STEP ON PODIUM 1)</span>`;
       } else if (gameState === "WAITING_FOR_P2") {
-        countdownPill.innerHTML = `STATUS: <span style="color:#00f0ff;">WAITING FOR PLAYER 2 (${p2JoinCountdown}s)...</span>`;
+        countdownPill.innerHTML = `STATUS: <span style="color:#00f0ff;">WAITING FOR REPLACEMENT ON PODIUM 2 (${p2JoinCountdown}s)...</span>`;
       } else if (gameState === "OPENING_DUEL") {
         countdownPill.innerHTML = `STATUS: <span style="color:#00f0ff;">OPENING DICE ROLL!</span>`;
       } else if (gameState === "IN_PLAY") {
@@ -317,6 +317,8 @@
         isDropoutRecoveryPrompt: !!window.isDropoutRecoveryPrompt,
         p2JoinCountdown,
         isP2JoinTimerActive,
+        p1ControllerSocketId: lockedP1SocketId,
+        p2ControllerSocketId: lockedP2SocketId,
         lockedP1SocketId,
         lockedP2SocketId,
         p2InviteAttempts,
@@ -345,8 +347,20 @@
       soloPlayerId = state.soloPlayerId || null;
       activePlayer = state.activePlayer || activePlayer;
 
-      lockedP1SocketId = state.lockedP1SocketId || state.p1ControllerSocketId || null;
-      lockedP2SocketId = state.lockedP2SocketId || state.p2ControllerSocketId || null;
+      if ('p1ControllerSocketId' in state) {
+        lockedP1SocketId = state.p1ControllerSocketId || null;
+      } else if ('lockedP1SocketId' in state) {
+        lockedP1SocketId = state.lockedP1SocketId || null;
+      }
+
+      if ('p2ControllerSocketId' in state) {
+        lockedP2SocketId = state.p2ControllerSocketId || null;
+      } else if ('lockedP2SocketId' in state) {
+        lockedP2SocketId = state.lockedP2SocketId || null;
+      }
+
+      if (!lockedP1SocketId && lastPodiumClaimed === 1) lastPodiumClaimed = 0;
+      if (!lockedP2SocketId && lastPodiumClaimed === 2) lastPodiumClaimed = 0;
 
       if (state.contestantNames) {
         contestantNames["goody-contestant-1"] = state.contestantNames["goody-contestant-1"] || "Player 1";
@@ -482,7 +496,15 @@
     function resumeShowAfterHostMigration() {
       if (!isLocalHost) return;
       if (gameState === "MODE_PROMPT") {
-        triggerImmediateModePrompt();
+        if (!window.isDropoutRecoveryPrompt) {
+          triggerImmediateModePrompt();
+        } else {
+          updateHudStatusBanner();
+          renderStageQuestionBoard();
+          pushAuthoritativeState();
+        }
+      } else if (gameState === "WAITING_FOR_P2") {
+        startPodium2JoinWait();
       } else if (gameState === "OPENING_DUEL") {
         beginTenSecondDiceDuel();
       } else if (gameState === "IN_PLAY") {
@@ -518,7 +540,7 @@
         applySyncedRoomState(payload.roomState);
 
         if (isLocalHost) {
-          if (!studioPower && gameState === "MODE_PROMPT") {
+          if (!studioPower && gameState === "MODE_PROMPT" && !window.isDropoutRecoveryPrompt) {
             triggerImmediateModePrompt();
           } else {
             resumeShowAfterHostMigration();
@@ -576,6 +598,34 @@
         }
       });
 
+      socket.on('contestant_disconnected', ({ contestantId, roomState: serverRoomState }) => {
+        if (contestantId === "goody-contestant-1") {
+          lockedP1SocketId = null;
+          isP1Connected = false;
+          p1PeerId = null;
+          if (lastPodiumClaimed === 1) lastPodiumClaimed = 0;
+        } else if (contestantId === "goody-contestant-2") {
+          lockedP2SocketId = null;
+          isP2Connected = false;
+          p2PeerId = null;
+          if (lastPodiumClaimed === 2) lastPodiumClaimed = 0;
+        }
+
+        if (serverRoomState) {
+          applySyncedRoomState(serverRoomState);
+        }
+
+        if (
+          isLocalHost &&
+          contestantId &&
+          !isSoloMode &&
+          !isVsGoodyMode &&
+          (gameState === "IN_PLAY" || gameState === "OPENING_DUEL")
+        ) {
+          handleMidGameDropout(contestantId);
+        }
+      });
+
       socket.on('audience_count', ({ count }) => {
         audienceCount = Math.max(1, count || 1);
         audienceCountEl.textContent = audienceCount;
@@ -593,7 +643,7 @@
 
       socket.on('remote_client_action', (action) => {
         if (!isLocalHost) return;
-        const sender = action.senderId || null;
+        const sender = action.senderId || action.fromSocketId || null;
         if (action.type === 'MODE_SELECT' && gameState === "MODE_PROMPT") {
           chooseHostGameMode(action.modeType, sender);
         } else if (action.type === 'ROLL_DICE') {
@@ -700,6 +750,7 @@
       if (modeType === "SOLO") {
         isSoloMode = true;
         isVsGoodyMode = false;
+        window.isDropoutRecoveryPrompt = false;
         soloPlayerId = "goody-contestant-1";
         const soloName = contestantNames[soloPlayerId];
         activePlayer = soloPlayerId;
@@ -718,6 +769,7 @@
       } else if (modeType === "GOODY") {
         isSoloMode = false;
         isVsGoodyMode = true;
+        window.isDropoutRecoveryPrompt = false;
         goodyPlayerSlot = "goody-contestant-2";
         contestantNames["goody-contestant-2"] = "Goody";
         pawn1.visible = true;
@@ -773,50 +825,45 @@
       stopPodium2JoinWait();
       gameState = "WAITING_FOR_P2";
       p2JoinCountdown = 10;
-      isP2JoinTimerActive = false;
+      isP2JoinTimerActive = true;
       updateHudStatusBanner();
       renderStageQuestionBoard();
       pushAuthoritativeState();
 
-      const inviteSpeech = `Welcome to The Goody Tonight Show! Player 1 is ready at Podium 1. Someone step onto Podium 2 within 10 seconds to join the battle!`;
-      setTimeout(() => {
-        if (gameState !== "WAITING_FOR_P2" || !isLocalHost) return;
-        speakGoody(inviteSpeech, () => {
-          if (gameState !== "WAITING_FOR_P2" || !isLocalHost) return;
-          p2JoinCountdown = 10;
-          isP2JoinTimerActive = true;
+      const inviteSpeech = droppedOutContestant
+        ? `A contestant has left the podium! Someone step onto Podium 2 within 10 seconds to take their place!`
+        : `Welcome to The Goody Tonight Show! Player 1 is ready at Podium 1. Someone step onto Podium 2 within 10 seconds to join the battle!`;
+
+      speakGoody(inviteSpeech);
+
+      p2JoinInterval = setInterval(() => {
+        if (!isLocalHost || gameState !== "WAITING_FOR_P2") {
+          stopPodium2JoinWait();
+          return;
+        }
+        p2JoinCountdown--;
+        updateHudStatusBanner();
+        renderStageQuestionBoard();
+        pushAuthoritativeState();
+
+        if (p2JoinCountdown <= 0) {
+          stopPodium2JoinWait();
+          p2InviteAttempts++;
+          window.isDropoutRecoveryPrompt = true;
+          studioPower = false;
+          gameState = "MODE_PROMPT";
+          updateStudioLighting(false);
+          updateCameraAlignment();
+          updateHudStatusBanner();
           renderStageQuestionBoard();
           pushAuthoritativeState();
 
-          p2JoinInterval = setInterval(() => {
-            if (!isLocalHost || gameState !== "WAITING_FOR_P2") {
-              stopPodium2JoinWait();
-              return;
-            }
-            p2JoinCountdown--;
-            renderStageQuestionBoard();
-            pushAuthoritativeState();
-
-            if (p2JoinCountdown <= 0) {
-              stopPodium2JoinWait();
-              p2InviteAttempts++;
-              window.isDropoutRecoveryPrompt = true;
-              studioPower = false;
-              gameState = "MODE_PROMPT";
-              updateStudioLighting(false);
-              updateCameraAlignment();
-              updateHudStatusBanner();
-              renderStageQuestionBoard();
-              pushAuthoritativeState();
-
-              const timeoutSpeech = p2InviteAttempts >= 2
-                ? "Time is up again! No one stepped onto Podium 2. 2-Player mode is now disabled—choose 1-Player Solo or 1-Player versus Goody!"
-                : "Time is up! Nobody stepped onto Podium 2. All game modes are now unlocked on the studio screen—you have one more chance to try 2-Player mode, or choose Solo or versus Goody!";
-              speakGoody(timeoutSpeech);
-            }
-          }, 1000);
-        });
-      }, 250);
+          const timeoutSpeech = p2InviteAttempts >= 2
+            ? "Time is up again! Nobody stepped onto Podium 2. Choose 1-Player Solo or 1-Player versus Goody to continue!"
+            : "Time is up! Nobody stepped onto Podium 2. Choose 1-Player Solo, 1-Player versus Goody, or try 2-Player mode one more time!";
+          speakGoody(timeoutSpeech);
+        }
+      }, 1000);
     }
 
     function broadcastBoardState() {
@@ -865,21 +912,31 @@
     }
 
     function handleMidGameDropout(contestantId) {
-      if (gameState === "GAME_OVER" || gameState === "INTERMISSION") return;
+      if (gameState === "GAME_OVER" || gameState === "WAITING_FOR_P2") return;
 
       if (goodyUtterance) {
         goodyUtterance.onend = null;
         goodyUtterance.onerror = null;
       }
-      window.speechSynthesis.cancel();
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       isGoodySpeaking = false;
 
       broadcastMicState("goody-contestant-1", false);
       broadcastMicState("goody-contestant-2", false);
 
       stopDiceCountdown();
-      if (questionInterval) clearInterval(questionInterval);
-      if (matchTimerInterval) clearInterval(matchTimerInterval);
+      if (questionInterval) {
+        clearInterval(questionInterval);
+        questionInterval = null;
+      }
+      if (matchTimerInterval) {
+        clearInterval(matchTimerInterval);
+        matchTimerInterval = null;
+      }
+      if (intermissionTimeout) {
+        clearTimeout(intermissionTimeout);
+        intermissionTimeout = null;
+      }
 
       isPawnMoving = false;
       hasPlayerRolledThisTurn = false;
@@ -887,6 +944,16 @@
       isDiceRollingP2 = false;
       isQuestionTimerActive = false;
       questionTimer = 0;
+
+      if (contestantId === "goody-contestant-1") {
+        lockedP1SocketId = null;
+        isP1Connected = false;
+        p1PeerId = null;
+      } else if (contestantId === "goody-contestant-2") {
+        lockedP2SocketId = null;
+        isP2Connected = false;
+        p2PeerId = null;
+      }
 
       savedGameState = gameState;
       savedTurnPlayer = activePlayer;
@@ -897,39 +964,26 @@
       stageSelectedOption = null;
       stageOptionStatus = null;
 
-      gameState = "INTERMISSION";
       droppedOutContestant = contestantId;
       droppedOutName = contestantNames[contestantId] || "";
       droppedOutCity = contestantCities[contestantId] || "";
       droppedOutSessionToken = contestantTokens[contestantId] || null;
 
-      const droppedNum = contestantId === "goody-contestant-1" ? `Player 1 (${droppedOutName})` : `Player 2 (${droppedOutName})`;
-
-      countdownPill.innerHTML = `STATUS: <span style="color:#ff7675;">INTERMISSION: WAITING FOR RECONNECT...</span>`;
-      renderStageQuestionBoard();
-      pushAuthoritativeState();
-
       connectedDataConns.forEach(c => {
         if (c.open) c.send({ type: "INTERMISSION_PAUSE", droppedContestant: contestantId });
       });
 
-      const speech = `Ladies and gentlemen, it appears ${droppedNum} has lost connection! We are taking a short intermission while our studio crew gets them back online!`;
-      speakGoody(speech);
-
-      if (intermissionTimeout) clearTimeout(intermissionTimeout);
-      intermissionTimeout = setTimeout(() => {
-        if (gameState === "INTERMISSION") {
-          triggerOfferChoiceMode();
-        }
-      }, 90000);
+      startPodium2JoinWait();
     }
 
     function triggerOnePlayerMode() {
-      if (gameState !== "INTERMISSION" && gameState !== "CONTESTANT_CHOOSING" && gameState !== "MODE_PROMPT") return;
+      if (gameState !== "INTERMISSION" && gameState !== "CONTESTANT_CHOOSING" && gameState !== "MODE_PROMPT" && gameState !== "WAITING_FOR_P2") return;
 
+      stopPodium2JoinWait();
       if (intermissionTimeout) clearTimeout(intermissionTimeout);
       isSoloMode = true;
       isVsGoodyMode = false;
+      window.isDropoutRecoveryPrompt = false;
 
       soloPlayerId = "goody-contestant-1";
       const soloName = contestantNames[soloPlayerId];
@@ -941,6 +995,9 @@
       pawn1.visible = true;
       if (window.p2PodiumGroup) window.p2PodiumGroup.visible = false;
 
+      studioPower = true;
+      updateStudioLighting(true);
+      updateCameraAlignment();
       countdownPill.innerHTML = `STATUS: <span style="color:#39ff14;">SOLO RACE ACTIVE!</span>`;
       gameState = "IN_PLAY";
       renderStageQuestionBoard();
@@ -983,8 +1040,10 @@
     }
 
     function triggerVsGoodyMode() {
+      stopPodium2JoinWait();
       isSoloMode = false;
       isVsGoodyMode = true;
+      window.isDropoutRecoveryPrompt = false;
 
       goodyPlayerSlot = droppedOutContestant || "goody-contestant-2";
       contestantNames[goodyPlayerSlot] = "Goody";
@@ -1002,6 +1061,9 @@
       const humanId = goodyPlayerSlot === "goody-contestant-1" ? "goody-contestant-2" : "goody-contestant-1";
       const humanName = contestantNames[humanId];
 
+      studioPower = true;
+      updateStudioLighting(true);
+      updateCameraAlignment();
       countdownPill.innerHTML = `STATUS: <span style="color:#00f0ff;">GOODY VS ${humanName.toUpperCase()}!</span>`;
 
       if (gameState === "MODE_PROMPT" || savedGameState === "INTRO_SPEECH" || savedGameState === "OPENING_DUEL" || savedGameState === "IDLE") {
@@ -1074,7 +1136,7 @@
 
       const speech = `Resuming on ${country} for ${pName}! Here is your fresh question: ${activeQuestion.q}... You have 30 seconds to lock in!`;
       speakGoody(speech, () => {
-        if (gameState === "INTERMISSION") return;
+        if (gameState === "INTERMISSION" || gameState === "WAITING_FOR_P2") return;
 
         if (activePlayer === goodyPlayerSlot) {
           executeGoodyAnswer();
@@ -1527,7 +1589,7 @@
               return;
             }
 
-            if (gameState === "INTERMISSION") return;
+            if (gameState === "INTERMISSION" || gameState === "WAITING_FOR_P2") return;
 
             if (data.type === "CONTESTANT_CHOSE_PATH") {
               if (gameState !== "CONTESTANT_CHOOSING" && gameState !== "MODE_PROMPT") return;
@@ -1856,7 +1918,7 @@
 
       function hopNextStep() {
         if (pawn.userData.hopToken !== hopToken) return;
-        if (gameState === "INTERMISSION") {
+        if (gameState === "INTERMISSION" || gameState === "WAITING_FOR_P2") {
           pawn.userData.isHopping = false;
           isPawnMoving = false;
           return;
@@ -1885,7 +1947,7 @@
 
         function stepFrame(now) {
           if (pawn.userData.hopToken !== hopToken) return;
-          if (gameState === "INTERMISSION") {
+          if (gameState === "INTERMISSION" || gameState === "WAITING_FOR_P2") {
             pawn.userData.isHopping = false;
             isPawnMoving = false;
             return;
@@ -1977,7 +2039,7 @@
           : `${activeName} landed on ${landedCountry}! Here is your question: ${activeQuestion.q}... You have 30 seconds to lock in!`;
 
         speakGoody(speech, () => {
-          if (gameState === "INTERMISSION") return;
+          if (gameState === "INTERMISSION" || gameState === "WAITING_FOR_P2") return;
 
           if (activePlayer === goodyPlayerSlot) {
             executeGoodyAnswer();
@@ -2008,7 +2070,7 @@
           clearInterval(questionInterval);
           return;
         }
-        if (gameState === "INTERMISSION") {
+        if (gameState === "INTERMISSION" || gameState === "WAITING_FOR_P2") {
           clearInterval(questionInterval);
           isQuestionTimerActive = false;
           return;
@@ -2340,6 +2402,7 @@
       lockedP1SocketId = null;
       lockedP2SocketId = null;
       p2InviteAttempts = 0;
+      window.isDropoutRecoveryPrompt = false;
       pushAuthoritativeState();
       connectedDataConns.forEach(c => {
         if (c.open) c.send({ type: "GAME_OVER", winner: winnerName, reason: reason });
@@ -2865,7 +2928,7 @@
 
           qBoardCtx.fillStyle = '#ffffff';
           qBoardCtx.font = '15px sans-serif';
-          qBoardCtx.fillText(allowSoloAndGoody ? "ALL MODES UNLOCKED (TAP OR PRESS 1-3):" : "INITIAL START: SELECT 2-PLAYER MODE:", 256, 105);
+          qBoardCtx.fillText(allowSoloAndGoody ? "NO REPLACEMENT JOINED - PICK MODE (TAP OR 1-3):" : "INITIAL START: SELECT 2-PLAYER MODE:", 256, 105);
 
           qBoardCtx.fillStyle = allowSoloAndGoody ? '#3498db' : '#2c3e50';
           qBoardCtx.fillRect(40, 125, 432, 42);
@@ -2895,16 +2958,16 @@
         }
       } else if (gameState === "WAITING_FOR_P2") {
         qBoardCtx.fillStyle = '#ffda66';
-        qBoardCtx.font = 'bold 23px sans-serif';
+        qBoardCtx.font = 'bold 22px sans-serif';
         qBoardCtx.textAlign = 'center';
-        qBoardCtx.fillText("2-PLAYER MODE SELECTED", 256, 52);
+        qBoardCtx.fillText(droppedOutContestant ? "PODIUM REOPENED FOR REPLACEMENT" : "2-PLAYER MODE SELECTED", 256, 52);
 
         qBoardCtx.fillStyle = '#00f0ff';
         qBoardCtx.fillRect(36, 68, 440, 2);
 
         qBoardCtx.fillStyle = '#ffffff';
         qBoardCtx.font = 'bold 17px sans-serif';
-        qBoardCtx.fillText("STEP ONTO PODIUM 2 TO JOIN THE SHOW!", 256, 125);
+        qBoardCtx.fillText("STEP ONTO PODIUM 2 WITHIN 10s TO JOIN!", 256, 125);
 
         if (isP2JoinTimerActive) {
           qBoardCtx.fillStyle = '#ff7675';
@@ -2913,7 +2976,7 @@
 
           qBoardCtx.fillStyle = '#39ff14';
           qBoardCtx.font = 'bold 14px monospace';
-          qBoardCtx.fillText("WAITING FOR CONTESTANT 2...", 256, 260);
+          qBoardCtx.fillText("WAITING FOR REPLACEMENT CONTESTANT...", 256, 260);
         } else {
           qBoardCtx.fillStyle = '#00f0ff';
           qBoardCtx.font = 'bold 16px monospace';
@@ -3211,6 +3274,7 @@
       if (!isSoloMode && !isVsGoodyMode && lockedP2SocketId === selfSocketId && p2RollVal === null) return true;
       return false;
     }
+
     function triggerRollAction() {
       if (gameState === "OPENING_DUEL") {
         if (!canLocalRollOpeningDuel()) return;
@@ -3258,7 +3322,7 @@
         const canvasX = uv ? uv.x * 512 : 256;
         const canvasY = uv ? (1 - uv.y) * 384 : -1;
 
-        const canInteractPrompt = (getPodiumCooldownRemaining() === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
+        const canInteractPrompt = (getPodiumCooldownRemaining() === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && (isLocalOnPodium1 || isLocalOnPodium2)));
 
         if (gameState === "MODE_PROMPT" && canInteractPrompt && canvasY >= 0) {
           const allowSoloAndGoody = !!window.isDropoutRecoveryPrompt;
@@ -3319,6 +3383,7 @@
         triggerRollAction();
       }
     }
+
     window.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('pointerup', (e) => {
       if (e.target && e.target.closest && e.target.closest('#mobile-controls')) return;
@@ -3395,8 +3460,9 @@
       mouth.position.set(0, 0.525, 0.21); mouth.rotation.x = Math.PI * 0.1; pGroup.add(mouth);
       return pGroup;
     }
+
     function setPlushieVisualMode(group, mode) {
-      if (!group || group.userData.visualMode === mode) return;
+      if (!group) return;
       group.userData.visualMode = mode;
       if (mode === 'invisible') {
         group.visible = false;
@@ -3408,15 +3474,9 @@
         if (child.isMesh && child.material) {
           const mats = Array.isArray(child.material) ? child.material : [child.material];
           mats.forEach(m => {
-            if (isOpaque) {
-              m.transparent = false;
-              m.opacity = 1.0;
-              m.depthWrite = true;
-            } else {
-              m.transparent = true;
-              m.opacity = 0.45;
-              m.depthWrite = false;
-            }
+            m.transparent = !isOpaque;
+            m.opacity = isOpaque ? 1.0 : 0.45;
+            m.depthWrite = isOpaque;
             m.needsUpdate = true;
           });
         }
@@ -3435,7 +3495,7 @@
       if (e.code === 'KeyA' || e.code === 'ArrowLeft') moveState.turnLeft = true;
       if (e.code === 'KeyD' || e.code === 'ArrowRight') moveState.turnRight = true;
 
-      const canInteractPrompt = (getPodiumCooldownRemaining() === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && isLocalOnPodium2));
+      const canInteractPrompt = (getPodiumCooldownRemaining() === 0) && (isLocalOnPodium1 || (window.isDropoutRecoveryPrompt && (isLocalOnPodium1 || isLocalOnPodium2)));
       if (gameState === "MODE_PROMPT" && canInteractPrompt) {
         const allowSoloAndGoody = !!window.isDropoutRecoveryPrompt;
         if (e.key === '1' && allowSoloAndGoody) chooseHostGameMode("SOLO");
@@ -3886,24 +3946,55 @@
       isLocalOnPodium2 = distP2 < 0.65;
 
       if (isLocalHost && gameState === "WAITING_FOR_P2") {
-        let p2JoinerId = null;
-        if (isLocalOnPodium2 && !isLocalOnPodium1 && selfSocketId !== lockedP1SocketId) {
-          p2JoinerId = selfSocketId;
-        } else {
-          remotePlushies.forEach((entry, id) => {
-            if (!p2JoinerId && id !== lockedP1SocketId && entry.mesh && entry.mesh.position.distanceTo(p2Pos) < 0.65) {
-              p2JoinerId = id;
-            }
-          });
+        let replacementId = null;
+        if (!lockedP1SocketId) {
+          if (isLocalOnPodium1 && selfSocketId !== lockedP2SocketId) {
+            replacementId = selfSocketId;
+            lockedP1SocketId = replacementId;
+          } else {
+            remotePlushies.forEach((entry, id) => {
+              if (!replacementId && id !== lockedP2SocketId && entry.mesh && entry.mesh.position.distanceTo(p1Pos) < 0.65) {
+                replacementId = id;
+                lockedP1SocketId = replacementId;
+              }
+            });
+          }
         }
-        if (p2JoinerId) {
-          lockedP2SocketId = p2JoinerId;
+
+        if (!replacementId && !lockedP2SocketId) {
+          if (isLocalOnPodium2 && selfSocketId !== lockedP1SocketId) {
+            replacementId = selfSocketId;
+            lockedP2SocketId = replacementId;
+          } else {
+            remotePlushies.forEach((entry, id) => {
+              if (!replacementId && id !== lockedP1SocketId && entry.mesh && entry.mesh.position.distanceTo(p2Pos) < 0.65) {
+                replacementId = id;
+                lockedP2SocketId = replacementId;
+              }
+            });
+          }
+        }
+
+        if (replacementId) {
           stopPodium2JoinWait();
-          gameState = "INTRO_SPEECH";
+          window.isDropoutRecoveryPrompt = false;
+          droppedOutContestant = null;
+          studioPower = true;
+          updateStudioLighting(true);
+          updateCameraAlignment();
+          gameState = "IN_PLAY";
+          updateHudStatusBanner();
           renderStageQuestionBoard();
+          startTwentyMinuteMatchTimer();
           pushAuthoritativeState();
-          speakGoody("Player 2 has stepped up to Podium 2! Let's roll our dice to see who goes first!", () => {
-            beginTenSecondDiceDuel();
+          speakGoody("A replacement contestant has stepped onto the podium! Resuming the show now!", () => {
+            if (savedActiveCountry) {
+              const countryToAsk = savedActiveCountry;
+              savedActiveCountry = null;
+              resumeWithFreshQuestion(savedTurnPlayer || "goody-contestant-1", countryToAsk);
+            } else {
+              startTurnCleanly(savedTurnPlayer || "goody-contestant-1");
+            }
           });
         }
       }
@@ -3914,27 +4005,14 @@
 
       if ((isLocalOnPodium1 !== prevPodium1) || (isLocalOnPodium2 !== prevPodium2)) {
         if (getPodiumCooldownRemaining() === 0) {
-          if (isLocalOnPodium1 && lastPodiumClaimed !== 1 && socket && socket.connected) {
+          if (isLocalOnPodium1 && !lockedP1SocketId && lastPodiumClaimed !== 1 && socket && socket.connected) {
             lastPodiumClaimed = 1;
+            lockedP1SocketId = selfSocketId;
             socket.emit('client_action', { type: 'CLAIM_PODIUM', slot: 1 });
-          } else if (isLocalOnPodium2 && lastPodiumClaimed !== 2 && socket && socket.connected) {
+          } else if (isLocalOnPodium2 && !lockedP2SocketId && lastPodiumClaimed !== 2 && socket && socket.connected) {
             lastPodiumClaimed = 2;
+            lockedP2SocketId = selfSocketId;
             socket.emit('client_action', { type: 'CLAIM_PODIUM', slot: 2 });
-          }
-        }
-
-        if (studioPower && !isSoloMode && !isVsGoodyMode && gameState === "IN_PLAY") {
-          if ((prevPodium1 && !isLocalOnPodium1) || (prevPodium2 && !isLocalOnPodium2)) {
-            podiumCooldownUntil = Date.now() + 30000;
-            lastPodiumClaimed = 0;
-            window.isDropoutRecoveryPrompt = true;
-            studioPower = false;
-            gameState = "MODE_PROMPT";
-            updateStudioLighting(false);
-            updateCameraAlignment();
-            updateHudStatusBanner();
-            renderStageQuestionBoard();
-            pushAuthoritativeState();
           }
         }
 
@@ -3989,17 +4067,24 @@
         }
       }
 
-      const isLocalContestant = (isSoloMode && activePlayer === soloPlayerId) ||
-                                (isVsGoodyMode && activePlayer !== goodyPlayerSlot && isLocalOnPodium1) ||
-                                (!isSoloMode && !isVsGoodyMode && (isLocalOnPodium1 || isLocalOnPodium2));
+      const isLocalContestant =
+        !!selfSocketId &&
+        ((isLocalOnPodium1 && lockedP1SocketId === selfSocketId) ||
+          (isLocalOnPodium2 && !isVsGoodyMode && lockedP2SocketId === selfSocketId) ||
+          (isSoloMode && isLocalOnPodium1));
 
-      updatePlushieVisibility(localPlushie, isLocalOnPodium1 && isLocalContestant, isLocalOnPodium2 && isLocalContestant);
+      updatePlushieVisibility(
+        localPlushie,
+        isLocalOnPodium1 && isLocalContestant,
+        isLocalOnPodium2 && isLocalContestant
+      );
 
-      remotePlushies.forEach((entry) => {
+      remotePlushies.forEach((entry, id) => {
         const rPos = entry.mesh.position;
         const rOnP1 = rPos.distanceTo(p1Pos) < 0.65;
         const rOnP2 = rPos.distanceTo(p2Pos) < 0.65;
-        updatePlushieVisibility(entry.mesh, rOnP1, rOnP2);
+        const rIsContestant = (rOnP1 && lockedP1SocketId === id) || (rOnP2 && !isVsGoodyMode && lockedP2SocketId === id);
+        updatePlushieVisibility(entry.mesh, rOnP1 && rIsContestant, rOnP2 && rIsContestant);
       });
 
       if (playerPlushie1) {
