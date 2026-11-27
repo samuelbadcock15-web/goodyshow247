@@ -54,7 +54,9 @@ function createInitialRoomState() {
       "goody-contestant-2": "Nottingham"
     },
     p1ControllerSocketId: null,
-    p2ControllerSocketId: null
+    p2ControllerSocketId: null,
+    lockedP1SocketId: null,
+    lockedP2SocketId: null
   };
 }
 
@@ -139,7 +141,18 @@ io.on('connection', (socket) => {
   // Active Showrunner (Host) pushes authoritative state updates to server & all viewers
   socket.on('sync_game_state', (newState) => {
     if (socket.id !== hostSocketId) return;
-    roomState = { ...roomState, ...newState };
+    roomState = {
+      ...roomState,
+      ...newState,
+      p1ControllerSocketId:
+        newState.p1ControllerSocketId !== undefined
+          ? newState.p1ControllerSocketId
+          : (newState.lockedP1SocketId !== undefined ? newState.lockedP1SocketId : roomState.p1ControllerSocketId),
+      p2ControllerSocketId:
+        newState.p2ControllerSocketId !== undefined
+          ? newState.p2ControllerSocketId
+          : (newState.lockedP2SocketId !== undefined ? newState.lockedP2SocketId : roomState.p2ControllerSocketId)
+    };
     socket.broadcast.emit('sync_game_state', roomState);
   });
 
@@ -155,11 +168,13 @@ io.on('connection', (socket) => {
     if (actionData.type === 'CLAIM_PODIUM') {
       if (actionData.slot === 1) {
         roomState.p1ControllerSocketId = socket.id;
+        roomState.lockedP1SocketId = socket.id;
         if (players[socket.id]) {
           roomState.contestantNames["goody-contestant-1"] = players[socket.id].name;
         }
       } else if (actionData.slot === 2) {
         roomState.p2ControllerSocketId = socket.id;
+        roomState.lockedP2SocketId = socket.id;
         if (players[socket.id]) {
           roomState.contestantNames["goody-contestant-2"] = players[socket.id].name;
         }
@@ -180,15 +195,29 @@ io.on('connection', (socket) => {
     console.log(`Player disconnected: ${socket.id}`);
     const wasHost = (socket.id === hostSocketId);
 
-    if (roomState.p1ControllerSocketId === socket.id) {
+    let disconnectedContestantId = null;
+    if (roomState.p1ControllerSocketId === socket.id || roomState.lockedP1SocketId === socket.id) {
       roomState.p1ControllerSocketId = null;
+      roomState.lockedP1SocketId = null;
+      disconnectedContestantId = "goody-contestant-1";
     }
-    if (roomState.p2ControllerSocketId === socket.id) {
+    if (roomState.p2ControllerSocketId === socket.id || roomState.lockedP2SocketId === socket.id) {
       roomState.p2ControllerSocketId = null;
+      roomState.lockedP2SocketId = null;
+      disconnectedContestantId = "goody-contestant-2";
     }
 
     delete players[socket.id];
-    io.emit('player_disconnected', { id: socket.id });
+    io.emit('player_disconnected', { id: socket.id, contestantId: disconnectedContestantId });
+
+    if (disconnectedContestantId) {
+      io.emit('contestant_disconnected', {
+        socketId: socket.id,
+        contestantId: disconnectedContestantId,
+        roomState
+      });
+    }
+
     io.emit('update_players', players);
     io.emit('audience_count', { count: Object.keys(players).length });
 
